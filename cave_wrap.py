@@ -30,6 +30,7 @@ S_FD, S_N, S_BUF, BUF_SIZE = 0xB0, 0xB8, 0xC0, 0x100
 S_PATH = S_BUF + BUF_SIZE
 FRAME = S_PATH + PATH_SIZE  # 0x210, a multiple of 16
 DATA_SIZE = 16
+FIXED_PATH = b"/savedata/vmc/PS2_C00.VM2"  # stage "fixed" only
 
 
 def _keep(c: int) -> bool:
@@ -68,8 +69,15 @@ def card_file(iso_path: str) -> str:
     return f"PS2_{name}.VM2" if name else ""
 
 
-def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
-    """Return the (va, old, new, what) patches and the bytes used from `cave_va`."""
+def build(cave_va: int, stage: str = "full") -> tuple[list[tuple[int, int, int, str]], int]:
+    """Return the (va, old, new, what) patches and the bytes used from `cave_va`.
+
+    `stage` is for bisecting a console problem: "full" is the feature, "title" leaves out the check that the card exists, and
+    "fixed" does not read cfg.bin at all and calls the original function with the fixed path FIXED_PATH built on a small stack.
+    """
+    buf = 0 if stage == "fixed" else BUF_SIZE
+    s_path = S_BUF + buf
+    frame = s_path + PATH_SIZE
     cfg_va = cave_va
     tramp_va = cave_va + DATA_SIZE  # mfcr r12 ; b RESUME: the replaced instruction, then the rest of the function
     code_va = tramp_va + 8
@@ -82,7 +90,8 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
     for i, c in enumerate(PREFIX):
         lines += [("lbz", "r0", i, "r5"), ("cmpwi", "r0", c), ("bne", "orig")]
     lines += [
-        ("stdu", "r1", -FRAME, "r1"), ("mflr", "r0"), ("std", "r0", FRAME + 0x10, "r1"), *save,
+        ("stdu", "r1", -frame, "r1"), ("mflr", "r0"), ("std", "r0", frame + 0x10, "r1"), *save,
+        *([("b", "fixedpath")] if stage == "fixed" else []),
         ("li", "r3", 0), ("lis", "r4", cfg_va >> 16), ("ori", "r4", "r4", cfg_va & 0xFFFF), ("bl", OPEN),
         ("cmpwi", "r3", 0), ("blt", "restore"), ("std", "r3", S_FD, "r1"),
         ("li", "r4", 0), ("addi", "r5", "r1", S_BUF), ("li", "r6", BUF_SIZE), ("bl", READ), ("std", "r3", S_N, "r1"),
@@ -102,7 +111,7 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         ("lbz", "r0", 0, "r6"), ("cmpwi", "r0", 0x2E), ("beq", "cut"), ("addi", "r6", "r6", -1), ("b", "ext"),
         ("label", "cut"), ("mr", "r4", "r6"),
         ("label", "noext"),
-        ("addi", "r8", "r1", S_PATH),
+        ("addi", "r8", "r1", s_path),
         *[x for i, ch in enumerate(PREFIX + NAME_PREFIX) for x in (("li", "r0", ch), ("stb", "r0", i, "r8"))],
         ("addi", "r9", "r8", len(PREFIX) + len(NAME_PREFIX)), ("li", "r10", 0),
         ("label", "cp"),
@@ -142,13 +151,20 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         lines += [("li", "r0", c), ("stb", "r0", i, "r9")]
     lines += [
         # the card must exist: open it and close it again, or leave the shared card
-        ("li", "r3", 0), ("addi", "r4", "r1", S_PATH), ("bl", OPEN), ("cmpwi", "r3", 0), ("blt", "restore"), ("bl", CLOSE),
-        ("addi", "r5", "r1", S_PATH), ("std", "r5", 0x80, "r1"),
+        *([("li", "r3", 0), ("addi", "r4", "r1", s_path), ("bl", OPEN), ("cmpwi", "r3", 0), ("blt", "restore"), ("bl", CLOSE)]
+          if stage == "full" else []),
+        ("label", "setpath"), ("addi", "r5", "r1", s_path), ("std", "r5", 0x80, "r1"),
         # call the original function with the path in this frame, then return to its caller
-        *load, ("bl", tramp_va), ("ld", "r0", FRAME + 0x10, "r1"), ("addi", "r1", "r1", FRAME), ("mtlr", "r0"), ("blr",),
-        ("label", "restore"), *load, ("ld", "r0", FRAME + 0x10, "r1"), ("addi", "r1", "r1", FRAME), ("mtlr", "r0"),
+        *load, ("bl", tramp_va), ("ld", "r0", frame + 0x10, "r1"), ("addi", "r1", "r1", frame), ("mtlr", "r0"), ("blr",),
+        ("label", "restore"), *load, ("ld", "r0", frame + 0x10, "r1"), ("addi", "r1", "r1", frame), ("mtlr", "r0"),
         ("label", "orig"), ("b", tramp_va),
     ]
+    if stage == "fixed":  # the path is the one of the image, copied to the stack a byte at a time; cfg.bin is not read
+        start = next(i for i, ln in enumerate(lines) if ln == ("stdu", "r1", -frame, "r1"))
+        end = next(i for i, ln in enumerate(lines) if ln == ("label", "setpath"))
+        lines[start + 3 + len(save):end] = [  # everything between the saved registers and "setpath"
+            *[x for i, ch in enumerate(FIXED_PATH + b"\0") for x in (("li", "r0", ch), ("stb", "r0", s_path + i, "r1"))],
+        ]
     words = assemble(code_va, lines)
     data = CFG_PATH.ljust(16, b"\0")
     patches = [(cave_va + i, 0, int.from_bytes(data[i:i + 4], "big"), "card wrapper data") for i in range(0, len(data), 4)]

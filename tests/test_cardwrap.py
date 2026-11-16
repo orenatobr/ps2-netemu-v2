@@ -174,3 +174,34 @@ def test_reference_rule_examples():
     assert C.card_name("/x/Grandia III (USA) (Disc 2).iso") == "Grandia_III__USA_"
     assert C.card_name("/x/(Disc 1).iso") == "" and C.card_file("/x/(Disc 1).iso") == ""
     assert C.card_name("/x/Gõ.iso") == "G__"  # a byte at a time, like the cave
+
+
+@pytest.fixture(scope="module")
+def staged() -> dict[str, bytes]:
+    path = os.environ.get("PS2_NETEMU_SELF")
+    if not path:
+        pytest.skip("stock SELF not provided")
+    base = S.unpack(Path(path).read_bytes())
+    return {st: P.apply_edits(P.extend_text(base), P.crop_edits() + P.wrap_card_edits(st)) for st in ("title", "fixed")}
+
+
+def test_stage_title_redirects_even_when_the_card_does_not_exist(staged):
+    files = Files(cfg("/x/Game.iso"))  # no card file
+    cpu, seen = call(staged["title"], files)
+    assert seen.entry["path"] == "/savedata/vmc/PS2_Game.VM2" and cpu.r[1] == STACK
+    assert [e[1] for e in files.log if e[0] == "open"] == ["/tmp/cfg.bin"]
+
+
+def test_stage_fixed_calls_the_original_with_a_fixed_path_on_a_small_stack(staged):
+    files = Files(cfg("/x/Game.iso"))
+    cpu, seen = call(staged["fixed"], files, ret=0x55)
+    assert seen.entry["path"] == C.FIXED_PATH.decode() and files.log == []
+    assert STACK - 0x120 <= seen.entry["r1"] and seen.entry["r5"] >= seen.entry["r1"]
+    assert cpu.r[1] == STACK and cpu.r[3] == 0x55
+    assert [seen.entry[k] for k in ("r3", "r4", "r6", "r7", "r9", "r10")] == [0, 0, 0x1006, 0x1007, 0x1009, 0x100A]
+
+
+@pytest.mark.parametrize("stage", ["title", "fixed"])
+def test_staged_builds_leave_other_cards_alone(staged, stage):
+    cpu, seen = call(staged[stage], Files(cfg("/x/Game.iso")), slot=1)
+    assert seen.entry["r5"] == BUF and seen.entry["r1"] == STACK

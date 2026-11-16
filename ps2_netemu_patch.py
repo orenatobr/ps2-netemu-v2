@@ -200,9 +200,9 @@ def slots_card_edits() -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
-def wrap_card_edits() -> tuple[Edit, ...]:
+def wrap_card_edits(stage: str = "full") -> tuple[Edit, ...]:
     """Feature: card named after the game, path built on the stack of a wrapper around the card function (cave_wrap)."""
-    patches, used = cave_wrap.build(CARD_CAVE_VA)
+    patches, used = cave_wrap.build(CARD_CAVE_VA, stage)
     if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
         raise ValueError("the card wrapper does not fit in the text page")
     return cave_edits(patches)
@@ -254,6 +254,8 @@ if __name__ == "__main__":
         chosen = crop_edits()
     elif "--serial-card" in sys.argv:
         chosen = crop_edits() + serial_card_edits()
+    elif any(a.startswith("--wrap-stage=") for a in sys.argv):
+        chosen = crop_edits() + wrap_card_edits(next(a.split("=")[1] for a in sys.argv if a.startswith("--wrap-stage=")))
     elif "--slots-card" in sys.argv:
         chosen = crop_edits() + slots_card_edits()
     elif "--file-card" in sys.argv:
