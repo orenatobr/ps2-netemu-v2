@@ -235,8 +235,6 @@ if __name__ == "__main__":
         chosen = crop_edits() + static_card_edits()
     elif "--iso-card" in sys.argv:
         chosen = crop_edits() + card_edits()
-    elif "--slots-card" in sys.argv:
-        chosen = crop_edits() + slots_card_edits()
     elif "--table-card" in sys.argv:
         chosen = crop_edits() + table_card_edits([a for a in sys.argv[3:] if not a.startswith("--")])
     elif "--probe-select" in sys.argv:
@@ -247,8 +245,10 @@ if __name__ == "__main__":
         chosen = crop_edits()
     elif "--serial-card" in sys.argv:
         chosen = crop_edits() + serial_card_edits()
-    else:
+    elif "--file-card" in sys.argv:
         chosen = crop_edits() + file_card_edits()
+    else:
+        chosen = crop_edits() + slots_card_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch=chosen is not EXPERIMENT and not any(
-        a in sys.argv for a in ("--serial-card", "--static-card", "--iso-card", "--probe", "--probe-select", "--table-card", "--slots-card", "--crop-only", "--debug-card"))
+        a in sys.argv for a in ("--serial-card", "--static-card", "--iso-card", "--probe", "--probe-select", "--table-card", "--file-card", "--crop-only", "--debug-card"))
         and not any(a.startswith("--stop-after=") for a in sys.argv))
