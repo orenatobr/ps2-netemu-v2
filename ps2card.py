@@ -15,7 +15,7 @@ CLUSTER_PAGES = 2
 IFC_CLUSTER, FAT_FIRST, FAT_CLUSTERS, ALLOC_OFFSET = 8, 9, 32, 41
 FREE, CHAIN_END = 0x7FFFFFFF, 0xFFFFFFFF
 COLUMN_BITS = bytes((j << 4) | (7 - j) for j in range(8))  # column parity of bit j: 0x07, 0x16, ..., 0x70
-_PARITY = [bin(i).count("1") & 1 for i in range(256)]
+_PARITY = [i.bit_count() & 1 for i in range(256)]
 # The 512 bytes of page 0 of a real card (format parameters only: no saves, no names).
 SUPERBLOCK = bytes.fromhex(
     "536f6e7920505332204d656d6f7279204361726420466f726d617420312e322e302e30000000000000020200100000ff"
