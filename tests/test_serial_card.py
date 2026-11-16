@@ -54,7 +54,7 @@ def path(cpu: Cpu) -> str:
 ])
 def test_the_serial_becomes_the_card_name(patched, cnf, expected):
     cpu, _ = disc(cnf, patched)
-    assert path(cpu) == f"/savedata/vmc/{expected}.VM2"
+    assert path(cpu) == f"/savedata/vmc/PS2_{expected}.VM2"
 
 
 @pytest.mark.parametrize("cnf", [

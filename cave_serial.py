@@ -3,7 +3,7 @@
 0x1339dc reads SYSTEM.CNF of a PS2 disc into a buffer and then calls 0x133280(ctx, buffer, size) to parse it. The call at
 0x133c00 is redirected here. This routine reads `BOOT2 = cdrom0:\\SLUS_213.45;1` from the buffer, turns the executable
 name into the serial `SLUS-21345` (letters upper case, `_` to `-`, `.` dropped) and writes the card path
-`/savedata/vmc/SLUS-21345.VM2` at `path_va`; a disc without a usable BOOT2 line leaves `path_va` empty. It then calls
+`/savedata/vmc/PS2_SLUS-21345.VM2` at `path_va`; a disc without a usable BOOT2 line leaves `path_va` empty. It then calls
 the original 0x133280 with the registers it received, and returns its result.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from ppcasm import assemble
 
 CALL_VA, CALL_STOCK = 0x133C00, 0x4BFFF681  # bl 0x133280
 PARSE_VA = 0x133280
-PREFIX = b"/savedata/vmc/"
+PREFIX = b"/savedata/vmc/PS2_"  # every card that worked on the console was named PS2_...; the others took the console down
 SUFFIX = b".VM2"
 MAX_SCAN, MAX_SERIAL, MIN_SERIAL = 0x400, 16, 4
 
