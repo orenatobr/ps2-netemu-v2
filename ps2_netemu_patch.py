@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 
 import cave_card
+import cave_cardfile
 import cave_cardname
 import cave_crop
 import cave_probe
@@ -148,6 +149,15 @@ def static_card_edits(name: bytes = b"PS2_SLUS-21345") -> tuple[Edit, ...]:
     return cave_edits(patches + data)
 
 
+def file_card_edits() -> tuple[Edit, ...]:
+    """Feature: one memory card per game, named after the ISO and shared by its discs (cave_cardfile). It only uses the
+    redirect of the card path and the read of /tmp/cfg.bin, both proven on the console."""
+    patches, used = cave_cardfile.build(CARD_CAVE_VA)
+    if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the card cave does not fit in the text page")
+    return cave_edits(patches)
+
+
 def probe_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe)."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA)[0])
@@ -186,6 +196,8 @@ if __name__ == "__main__":
         chosen = crop_edits() + probe_edits()
     elif "--crop-only" in sys.argv:
         chosen = crop_edits()
-    else:
+    elif "--serial-card" in sys.argv:
         chosen = crop_edits() + serial_card_edits()
+    else:
+        chosen = crop_edits() + file_card_edits()
     main(sys.argv[1], sys.argv[2], chosen)
