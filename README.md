@@ -10,13 +10,12 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 | Feature | State |
 |---|---|
 | Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | **In the published package. Confirmed on the console**: the screen is 100% filled |
-| One memory card per game | **Not published, not working yet.** Redirecting the card to a fixed file works; choosing the file by the disc serial has taken the console down in tests, see below |
+| One memory card per game, named after the ISO title | **Not published yet.** Fixed redirect confirmed on the console; the build that picks the card by ISO name (data-segment scratch, no store in the code page) is installed for the hardware test |
 | Safe installer (backup, hash checks, restore) | In the published package |
 | Installer creating the missing per-game cards from the ISOs | In the repository (host tests pass), not in the published package |
 
-Known limitation of the card work: discs of the same game with different serials (Grandia III disc 1 is `SLUS-21334`, disc 2
-is `SLUS-21345`) would get different cards, because the emulator side cannot see the ISO file names without reading the ISO
-from inside the emulator, which is the part that failed on the console. The PS1 patch groups them by the `(Disc N)` name.
+Multi-disc games share one card through the `(Disc N)` rule on the ISO file name. Discs without that tag in the name get
+their own card.
 
 ## What it is
 
@@ -49,26 +48,33 @@ nothing cut. Not yet known: whether every game and video mode (480i, 480p, PAL) 
 
 ## Feature 2: one memory card per game
 
-The same logic as the PS1 emulator patch: the card is named after the **serial** read from `SYSTEM.CNF` of the disc
-(`SLUS-21345.VM2`), and a disc named `(Disc N)` (N from 2 to 9) uses the card of the `(Disc 1)` image with the same name
-when that image exists.
+The card is named after the **game title in the ISO file name**, with the `(Disc N)` tag removed, so every disc of a game shares
+one card: `Grandia III (USA) (Disc 2).iso` and `(Disc 1).iso` both use `/savedata/vmc/PS2_Grandia_III__USA_.VM2`. Characters
+other than letters, digits, `_` and `-` become `_`.
 
-How it works (`cave_card.py`): `0x12a528(slot, 0, path, ...)` receives the card path in `r5`. For memory card 1 and a
+Why the file name and not the disc serial (what the PS1 patch does): reading `SYSTEM.CNF` from inside the emulator means
+opening and parsing the ISO from the hook, and every build that did it took the console down. Grandia III also has a
+different serial on each disc (`SLUS-21334` and `SLUS-21345`), so a serial would split the game across two cards, and the
+`(Disc N)` rule is what keeps the save reachable from disc 2.
+
+How it works (`cave_cardfile.py`): `0x12a528(slot, 0, path, ...)` receives the card path in `r5`. For memory card 1 and a
 path in `/savedata/vmc/` (the shared card of ISO games) the hook
 
 1. reads `/tmp/cfg.bin`, which Cobra fills with the path of the mounted ISO, with the emulator's own file calls
    (`0x1ecc5c` open, `0x1ed5cc` read at an offset, `0x1ecb10` close, the ones it uses for `ps2bootparam.dat`);
-2. opens the image, reads the volume descriptor, walks the root directory record by record and reads `SYSTEM.CNF`;
-3. turns `BOOT2 = cdrom0:\SLUS_213.45;1` into `SLUS-21345` and points `r5` at `/savedata/vmc/SLUS-21345.VM2`.
+2. builds the card path from the file name in a writable scratch area (the unused tail of the data segment page,
+   `0x74e940`, made official by `extend_data`);
+3. points `r5` at it.
 
-Anything it does not understand leaves the shared card. It uses a 512 byte stack frame and one 256 byte buffer.
+Anything it does not understand leaves the shared card. **Nothing is ever stored into the code page**: every earlier build
+that wrote there (the card path in the cave, debug markers) took the console down, and the builds that only read it did not.
+`cave_card.py` (ISO reading, serial from `SYSTEM.CNF`) and `cave_serial.py` stay in the repository as the failed approach.
 
 Findings on the console (Grandia III disc 2):
 
-* Redirecting `r5` works: a fixed path to a card made by `ps2card.py` was loaded, and the game saved in it.
+* Redirecting `r5` to a fixed card works: the game loaded the save and wrote to the new card, `PS2.VM2` untouched.
 * The emulator does **not** create a missing card, so the cards must exist. The installer creates them (below).
-* Calling the emulator's file functions from the hook is safe when the frame and the reads are small (a first version
-  with a 2.8 KB frame and 2 KB reads took the console down).
+* Calling the emulator's file functions from the hook is safe when the frame and the reads are small.
 * The card file date does not move when the emulator writes: compare hashes, not dates.
 
 `ps2card.py` builds a blank formatted card (`.VM2`: 8 MB of data plus 16 ECC bytes per page); the ECC rule was fitted on
