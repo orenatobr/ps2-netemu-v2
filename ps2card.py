@@ -8,6 +8,7 @@ written stay erased (0xFF data and spare).
 from __future__ import annotations
 
 import struct
+from itertools import pairwise
 
 PAGE, SPARE, PAGES = 512, 16, 16384
 CARD_BYTES = PAGES * (PAGE + SPARE)  # 8,650,752
@@ -74,3 +75,129 @@ def blank_card() -> bytes:
     for p, data in pages.items():
         out[p * (PAGE + SPARE):(p + 1) * (PAGE + SPARE)] = data + spare_for(data)
     return bytes(out)
+
+
+# --- copying a save between cards ---------------------------------------------------------------------------------
+
+ENTRY = 512
+IS_DIR, EXISTS = 0x0020, 0x8000
+
+
+class Card:
+    """A read view of a card: FAT, directories and files (clusters are `ALLOC_OFFSET` + relative number)."""
+
+    def __init__(self, raw: bytes):
+        if len(raw) != CARD_BYTES:
+            raise ValueError("not a 8 MB card with ECC")
+        self.raw = raw
+        fat = b"".join(self.cluster(FAT_FIRST + i) for i in range(FAT_CLUSTERS))
+        self.fat = struct.unpack(f"<{len(fat) // 4}I", fat)
+
+    def cluster(self, absolute: int) -> bytes:
+        """The 1024 data bytes of an absolute cluster."""
+        return b"".join(self.raw[p * (PAGE + SPARE):p * (PAGE + SPARE) + PAGE]
+                        for p in (absolute * CLUSTER_PAGES, absolute * CLUSTER_PAGES + 1))
+
+    def chain(self, first: int) -> list[int]:
+        """Relative clusters of the chain that starts at `first`."""
+        out, c = [], first
+        while c < len(self.fat) and c not in out:
+            out.append(c)
+            e = self.fat[c]
+            if e == CHAIN_END or not e & 0x80000000:
+                break
+            c = e & 0x7FFFFFFF
+        return out
+
+    def read(self, first: int) -> bytes:
+        return b"".join(self.cluster(ALLOC_OFFSET + c) for c in self.chain(first))
+
+    def entries(self, first: int, count: int) -> list[bytes]:
+        data = self.read(first)
+        return [data[i * ENTRY:(i + 1) * ENTRY] for i in range(count)]
+
+
+def entry_fields(e: bytes) -> tuple[int, int, int, bytes]:
+    """(mode, length, first cluster, name) of a directory entry."""
+    mode, length = struct.unpack("<II", e[:8])
+    return mode, length, struct.unpack("<I", e[16:20])[0], e[64:96].split(b"\0")[0]
+
+
+def with_cluster(e: bytes, cluster: int, dir_entry: int | None = None) -> bytes:
+    """The entry with its first cluster (and optionally its entry number in the parent) replaced."""
+    out = bytearray(e)
+    out[16:20] = struct.pack("<I", cluster)
+    if dir_entry is not None:
+        out[20:24] = struct.pack("<I", dir_entry)
+    return bytes(out)
+
+
+def copy_save(src: bytes, save_name: str, dst: bytes | None = None) -> bytes:
+    """Return `dst` (a blank card when omitted) with the save directory `save_name` of the card `src` copied into it.
+
+    The directory and its files get fresh clusters in order; the root directory of the result lists the save. Raises
+    KeyError when the save is not on `src`.
+    """
+    s = Card(src)
+    d = Card(dst if dst is not None else blank_card())
+    root_len = entry_fields(s.entries(0, 1)[0])[1]
+    root = s.entries(0, root_len)
+    want = save_name.encode()
+    found = next((e for e in root[2:] if entry_fields(e)[0] & IS_DIR and entry_fields(e)[0] & EXISTS and entry_fields(e)[3] == want), None)
+    if found is None:
+        raise KeyError(save_name)
+    _, length, first, _ = entry_fields(found)
+    sub = s.entries(first, length)
+
+    d_root_len = entry_fields(d.entries(0, 1)[0])[1]
+    if d_root_len != 2:
+        raise ValueError("the destination must be a card without saves")
+    fat = list(d.fat)
+    cards = bytearray(d.raw)
+    free = iter(range(2, len(fat)))  # 0 and 1 are the two root clusters
+
+    def alloc(n: int) -> list[int]:
+        got = [next(free) for _ in range(n)]
+        for a, b in pairwise(got):
+            fat[a] = 0x80000000 | b
+        fat[got[-1]] = CHAIN_END
+        return got
+
+    def write(relative: int, data: bytes) -> None:
+        for k in range(CLUSTER_PAGES):
+            p = (ALLOC_OFFSET + relative) * CLUSTER_PAGES + k
+            page = data[k * PAGE:(k + 1) * PAGE]
+            cards[p * (PAGE + SPARE):(p + 1) * (PAGE + SPARE)] = page + spare_for(page)
+
+    # the save directory and its files
+    dir_chain = alloc((length + 1) // 2)
+    new_sub = [sub[0], sub[1]]
+    for e in sub[2:]:
+        _, ln, c, _ = entry_fields(e)
+        data = b"".join(s.cluster(ALLOC_OFFSET + c2) for c2 in s.chain(c)) if ln else b""
+        if data:
+            fc = alloc((ln + 1023) // 1024)
+            for i, rel in enumerate(fc):
+                write(rel, data[i * 1024:(i + 1) * 1024].ljust(1024, b"\xff"))
+            new_sub.append(with_cluster(e, fc[0]))
+        else:
+            new_sub.append(e)
+    new_sub[0] = with_cluster(new_sub[0], 0, 2)  # "." knows it is entry 2 of the root
+    blob = b"".join(new_sub).ljust(len(dir_chain) * 1024, b"\xff")
+    for i, rel in enumerate(dir_chain):
+        write(rel, blob[i * 1024:(i + 1) * 1024])
+    # the root directory: ".", "..", the save
+    root_dot = bytearray(root[0])
+    root_dot[4:8] = struct.pack("<I", 3)
+    fat[0], fat[1] = 0x80000001, CHAIN_END
+    root_blob = (bytes(root_dot) + root[1] + with_cluster(found, dir_chain[0], 0)).ljust(2048, b"\xff")
+    write(0, root_blob[:1024])
+    write(1, root_blob[1024:])
+    fat_bytes = struct.pack(f"<{len(fat)}I", *fat)
+    for i in range(FAT_CLUSTERS):
+        write_abs = FAT_FIRST + i
+        for k in range(CLUSTER_PAGES):
+            p = write_abs * CLUSTER_PAGES + k
+            page = fat_bytes[i * 1024 + k * PAGE:i * 1024 + (k + 1) * PAGE]
+            cards[p * (PAGE + SPARE):(p + 1) * (PAGE + SPARE)] = page + spare_for(page)
+    return bytes(cards)

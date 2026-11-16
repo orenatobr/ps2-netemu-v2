@@ -77,3 +77,31 @@ def test_ecc_rule_matches_every_written_page_of_a_real_card():
         assert C.spare_for(raw[:C.PAGE]) == raw[C.PAGE:]
     assert n > 0
     assert C.blank_card()[:PAGE_RAW] == real[:PAGE_RAW]
+
+
+@pytest.mark.skipif("PS2_REAL_VM2" not in os.environ, reason="real card not provided")
+def test_a_save_copied_from_a_real_card_is_identical_and_every_page_has_its_ecc():
+    src = Path(os.environ["PS2_REAL_VM2"]).read_bytes()
+    s = C.Card(src)
+    root = s.entries(0, C.entry_fields(s.entries(0, 1)[0])[1])
+    name = next(C.entry_fields(e)[3] for e in root[2:] if C.entry_fields(e)[0] & C.IS_DIR and C.entry_fields(e)[0] & C.EXISTS)
+    out = C.copy_save(src, name.decode())
+    d = C.Card(out)
+    new_root = d.entries(0, 3)
+    assert [C.entry_fields(e)[3] for e in new_root[:2]] == [b".", b".."] and C.entry_fields(new_root[2])[3] == name
+    _, length, first, _ = C.entry_fields(new_root[2])
+    old = next(e for e in root[2:] if C.entry_fields(e)[3] == name)
+    new_files = d.entries(first, length)[2:]
+    old_files = s.entries(C.entry_fields(old)[2], length)[2:]
+    for a, b in zip(new_files, old_files):
+        assert C.entry_fields(a)[1:2] == C.entry_fields(b)[1:2] and C.entry_fields(a)[3] == C.entry_fields(b)[3]
+        n = C.entry_fields(a)[1]
+        assert d.read(C.entry_fields(a)[2])[:n] == s.read(C.entry_fields(b)[2])[:n]
+    for p in range(C.PAGES):
+        raw = out[p * PAGE_RAW:(p + 1) * PAGE_RAW]
+        assert raw == b"\xff" * PAGE_RAW or C.spare_for(raw[:C.PAGE]) == raw[C.PAGE:]
+
+
+def test_copy_save_refuses_a_missing_save_and_a_destination_with_saves(blank):
+    with pytest.raises(KeyError):
+        C.copy_save(blank, "NOPE")

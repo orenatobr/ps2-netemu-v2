@@ -17,7 +17,6 @@ from dataclasses import dataclass
 
 import cave_card
 import cave_crop
-import cave_serial
 import selfio
 
 logger = logging.getLogger(__name__)
@@ -25,8 +24,6 @@ STOCK_SHA256 = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a
 CAVE_VA = 0x2FF940  # first free byte after the stock text segment; the page is mapped up to 0x300000
 CAVE_SIZE = 0x6C0
 CARD_CAVE_VA = CAVE_VA + 0x100  # the crop cave uses the first 0x100 bytes
-SERIAL_CAVE_VA = CAVE_VA + 0x200
-PATH_VA = CAVE_VA + 0x440  # 64 bytes: the card path of the disc, empty when none
 
 
 @dataclass(frozen=True)
@@ -117,14 +114,11 @@ def crop_edits() -> tuple[Edit, ...]:
 
 
 def card_edits() -> tuple[Edit, ...]:
-    """Feature: one memory card file per game, named after the serial of the disc (see cave_serial, cave_card)."""
-    serial, used_serial = cave_serial.build(SERIAL_CAVE_VA, PATH_VA)
-    card, used_card = cave_card.build(CARD_CAVE_VA, PATH_VA)
-    if CARD_CAVE_VA + used_card > SERIAL_CAVE_VA or SERIAL_CAVE_VA + used_serial > PATH_VA:
-        raise ValueError("a cave overlaps the next one")
-    if PATH_VA + 64 > CAVE_VA + CAVE_SIZE:
-        raise ValueError("the caves do not fit in the text page")
-    return cave_edits(serial + card)
+    """Feature: one memory card file per game, named after the ISO and shared by its discs (see cave_card)."""
+    patches, used = cave_card.build(CARD_CAVE_VA)
+    if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the card cave does not fit in the text page")
+    return cave_edits(patches)
 
 
 def main(src: str, dst: str, edits: tuple[Edit, ...]) -> None:
