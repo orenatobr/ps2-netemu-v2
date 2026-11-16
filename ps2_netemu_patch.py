@@ -114,9 +114,9 @@ def crop_edits() -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
-def card_edits(debug: bool = False) -> tuple[Edit, ...]:
+def card_edits() -> tuple[Edit, ...]:
     """Feature: one memory card file per game, named after the ISO and shared by its discs (see cave_card)."""
-    patches, used = cave_card.build(CARD_CAVE_VA, debug)
+    patches, used = cave_card.build(CARD_CAVE_VA)
     if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
         raise ValueError("the card cave does not fit in the text page")
     return cave_edits(patches)
@@ -149,8 +149,6 @@ if __name__ == "__main__":
         chosen = EXPERIMENT
     elif "--probe" in sys.argv:
         chosen = crop_edits() + probe_edits()
-    elif "--debug-card" in sys.argv:
-        chosen = crop_edits() + card_edits(debug=True)
     elif "--crop-only" in sys.argv:
         chosen = crop_edits()
     else:
