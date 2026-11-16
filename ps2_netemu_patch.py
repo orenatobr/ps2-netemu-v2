@@ -23,6 +23,7 @@ import cave_probe
 import cave_serial
 import cave_slots
 import cave_table
+import cave_wrap
 import selfio
 
 logger = logging.getLogger(__name__)
@@ -199,6 +200,14 @@ def slots_card_edits() -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
+def wrap_card_edits() -> tuple[Edit, ...]:
+    """Feature: card named after the game, path built on the stack of a wrapper around the card function (cave_wrap)."""
+    patches, used = cave_wrap.build(CARD_CAVE_VA)
+    if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the card wrapper does not fit in the text page")
+    return cave_edits(patches)
+
+
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe); `select` picks the card by the cfg.bin format."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA, select)[0])
@@ -245,8 +254,10 @@ if __name__ == "__main__":
         chosen = crop_edits()
     elif "--serial-card" in sys.argv:
         chosen = crop_edits() + serial_card_edits()
+    elif "--slots-card" in sys.argv:
+        chosen = crop_edits() + slots_card_edits()
     elif "--file-card" in sys.argv:
         chosen = crop_edits() + file_card_edits()
     else:
-        chosen = crop_edits() + slots_card_edits()
+        chosen = crop_edits() + wrap_card_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)
