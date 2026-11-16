@@ -16,13 +16,13 @@ namespace {
 Bytes bytes(const std::string& s) { return Bytes(s.begin(), s.end()); }
 
 struct Fixture {
-    fs::path dir = fs::temp_directory_path() / ("ps1inst_" + std::to_string(std::rand()));
-    Bytes stock = bytes("stock ps1_netemu"), patched = bytes("patched ps1_netemu!");
+    fs::path dir = fs::temp_directory_path() / ("ps2inst_" + std::to_string(std::rand()));
+    Bytes stock = bytes("stock ps2_netemu"), patched = bytes("patched ps2_netemu!");
     installer::Config cfg;
 
     Fixture() {
         fs::create_directories(dir / "flash");
-        cfg.target = (dir / "flash/ps1_netemu.self").string();
+        cfg.target = (dir / "flash/ps2_netemu.self").string();
         cfg.backup = (dir / "backup.self").string();
         cfg.stockSha = installer::sha256(stock);
         cfg.patchedSha = installer::sha256(patched);

@@ -4,27 +4,27 @@
 
 namespace ui {
 
-const Text kEn = {"PS1 emulator patch v2.00",
-                  "ps1_netemu.self: DuckStation-style vertical overscan (NTSC), 4:3 width unchanged.",
+const Text kEn = {"PS2 emulator patch v2.00",
+                  "ps2_netemu.self: removes the black band at the top of the picture (4:3 frame kept).",
                   "File on the console", "Original (not patched)", "Patched (v2.00)", "Unknown build", "Not found",
                   "Install the patch", "Restore the original", "Exit", "Triangle",
-                  "Installed. The original is saved in /dev_hdd0/ps1_netemu_stock.self. Start a PS1 game.",
+                  "Installed. The original is saved in /dev_hdd0/ps2_netemu_stock.self. Start a PS2 game.",
                   "Already installed.", "Original restored.",
                   "This file is not the build the patch was made for. Nothing was changed.",
                   "The package is damaged. Nothing was changed.", "No backup found. Nothing to restore.",
                   "Write failed. The original was kept; try again.", "Could not open the system files. This needs custom firmware.",
-                  "The patch is installed but there is no backup of the original, so Triangle cannot restore it. Copy the original to /dev_hdd0/ps1_netemu_stock.self."};
+                  "The patch is installed but there is no backup of the original, so Triangle cannot restore it. Copy the original to /dev_hdd0/ps2_netemu_stock.self."};
 
-const Text kPt = {"Patch do emulador de PS1 v2.00",
-                  "ps1_netemu.self: overscan vertical estilo DuckStation (NTSC), largura 4:3 inalterada.",
+const Text kPt = {"Patch do emulador de PS2 v2.00",
+                  "ps2_netemu.self: remove a faixa preta do topo da imagem (moldura 4:3 mantida).",
                   "Arquivo no console", "Original (sem patch)", "Com patch (v2.00)", "Versão desconhecida", "Não encontrado",
                   "Instalar o patch", "Restaurar o original", "Sair", "Triângulo",
-                  "Instalado. O original está salvo em /dev_hdd0/ps1_netemu_stock.self. Abra um jogo de PS1.",
+                  "Instalado. O original está salvo em /dev_hdd0/ps2_netemu_stock.self. Abra um jogo de PS2.",
                   "Já está instalado.", "Original restaurado.",
                   "Este arquivo não é a versão para a qual o patch foi feito. Nada foi alterado.",
                   "O pacote está danificado. Nada foi alterado.", "Nenhum backup encontrado. Nada para restaurar.",
                   "Falha ao gravar. O original foi mantido; tente de novo.", "Não foi possível abrir os arquivos do sistema. Precisa de firmware customizado.",
-                  "O patch está instalado, mas não há backup do original, então Triângulo não consegue restaurar. Copie o original para /dev_hdd0/ps1_netemu_stock.self."};
+                  "O patch está instalado, mas não há backup do original, então Triângulo não consegue restaurar. Copie o original para /dev_hdd0/ps2_netemu_stock.self."};
 
 std::string message(const Text& t, const installer::Outcome& o) {
     if (o.code == "installed") return t.installed;

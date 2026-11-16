@@ -1,4 +1,4 @@
-// Install / restore the patched ps1_netemu.self. Pure file logic: no console API, so it is tested on the host.
+// Install / restore the patched ps2_netemu.self. Pure file logic: no console API, so it is tested on the host.
 #pragma once
 
 #include <cstdint>
@@ -13,7 +13,7 @@ using Bytes = std::vector<std::uint8_t>;
 std::string sha256(const Bytes& data);
 
 struct Config {
-    std::string target;     ///< The emulator file on the console (/dev_blind/ps1emu/ps1_netemu.self).
+    std::string target;     ///< The emulator file on the console (/dev_blind/ps2emu/ps2_netemu.self).
     std::string backup;     ///< Where the stock file is kept.
     std::string stockSha;   ///< SHA-256 of the only stock build this patch fits.
     std::string patchedSha; ///< SHA-256 of the patched build we install.

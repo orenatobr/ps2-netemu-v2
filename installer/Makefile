@@ -1,8 +1,8 @@
 #---------------------------------------------------------------------------------
-# PS1 emulator patch installer for PS3 (PSL1GHT). Needs the ps3dev toolchain: export PS3DEV=<path> PSL1GHT=<path>.
-# Needs payload/ps1_netemu_v2.bin first (see ../README.md).
-#   make        builds PS1NetemuPatch.self
-#   make pkg    builds PS1NetemuPatch.pkg (installable with "Install Package Files" on a CFW console)
+# PS2 emulator patch installer for PS3 (PSL1GHT). Needs the ps3dev toolchain: export PS3DEV=<path> PSL1GHT=<path>.
+# Needs payload/ps2_netemu_v2.bin first (see ../README.md).
+#   make        builds PS2NetemuPatch.self
+#   make pkg    builds PS2NetemuPatch.pkg (installable with "Install Package Files" on a CFW console)
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
@@ -21,17 +21,17 @@ include $(PSL1GHT)/ppu_rules
 # INCLUDES is a list of directories containing extra header files
 # DATA is a list of directories with files linked into the binary (the fonts)
 #---------------------------------------------------------------------------------
-TARGET		:=	PS1NetemuPatch
+TARGET		:=	PS2NetemuPatch
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data payload
 INCLUDES	:=	source third_party/stb
 
 # sha256 of the payload, compiled in so the installer refuses any other build
-PATCHED_SHA256	:=	$(shell shasum -a 256 $(MKROOT)payload/ps1_netemu_v2.bin | cut -d' ' -f1)
+PATCHED_SHA256	:=	$(shell shasum -a 256 $(MKROOT)payload/ps2_netemu_v2.bin | cut -d' ' -f1)
 
-TITLE		:=	PS1 Emulator Patch
-APPID		:=	PS1NMPTCH
+TITLE		:=	PS2 Emulator Patch
+APPID		:=	PS2NMPTCH
 CONTENTID	:=	UP0001-$(APPID)_00-0000000000000000
 SFOXML		:=	$(MKROOT)pkg/sfo.xml
 ICON0		:=	$(MKROOT)pkg/ICON0.PNG
