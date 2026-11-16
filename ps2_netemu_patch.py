@@ -16,8 +16,10 @@ import sys
 from dataclasses import dataclass
 
 import cave_card
+import cave_cardname
 import cave_crop
 import cave_probe
+import cave_serial
 import selfio
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,8 @@ STOCK_SHA256 = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a
 CAVE_VA = 0x2FF940  # first free byte after the stock text segment; the page is mapped up to 0x300000
 CAVE_SIZE = 0x6C0
 CARD_CAVE_VA = CAVE_VA + 0xA0  # the crop cave uses the first 0x98 bytes
+SERIAL_CAVE_VA = CAVE_VA + 0x200  # the serial capture (528 bytes); the card cave of the serial plan sits at CARD_CAVE_VA
+PATH_VA = CAVE_VA + 0x440  # 64 bytes: the card path of the disc, empty when none
 
 
 @dataclass(frozen=True)
@@ -122,6 +126,16 @@ def card_edits(debug: bool = False, stop_after: str | None = None) -> tuple[Edit
     return cave_edits(patches)
 
 
+def serial_card_edits() -> tuple[Edit, ...]:
+    """Feature: one memory card per game, named after the serial of the disc read from the SYSTEM.CNF the emulator already
+    reads (cave_serial) and used for memory card 1 (cave_cardname). No file calls are made by the hooks."""
+    serial, used_serial = cave_serial.build(SERIAL_CAVE_VA, PATH_VA)
+    name, used_name = cave_cardname.build(CARD_CAVE_VA, PATH_VA)
+    if CARD_CAVE_VA + used_name > SERIAL_CAVE_VA or SERIAL_CAVE_VA + used_serial > PATH_VA or PATH_VA + 64 > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the caves do not fit in the text page")
+    return cave_edits(serial + name)
+
+
 def probe_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe)."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA)[0])
@@ -152,10 +166,12 @@ if __name__ == "__main__":
         chosen = crop_edits() + card_edits(stop_after=stage)
     elif "--debug-card" in sys.argv:
         chosen = crop_edits() + card_edits(debug=True)
+    elif "--iso-card" in sys.argv:
+        chosen = crop_edits() + card_edits()
     elif "--probe" in sys.argv:
         chosen = crop_edits() + probe_edits()
     elif "--crop-only" in sys.argv:
         chosen = crop_edits()
     else:
-        chosen = crop_edits() + card_edits()
+        chosen = crop_edits() + serial_card_edits()
     main(sys.argv[1], sys.argv[2], chosen)
