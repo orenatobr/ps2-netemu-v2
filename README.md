@@ -8,8 +8,8 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 | Feature | State |
 |---|---|
 | Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | **Confirmed on the console**: the screen is 100% filled |
-| One memory card per game | **Not implemented yet** (research done, see below) |
-| Safe installer (backup, hash checks, restore) | Done |
+| One memory card per game, named after the game serial, shared by the discs of a game | In test on the console (see below) |
+| Safe installer (backup, hash checks, restore, creates the missing cards) | Done; the card creation is tested on the host only |
 
 ## What it is
 
@@ -40,23 +40,37 @@ History on the console (Grandia III): cropping only the top made the band reappe
 so the texture has a blank band on both ends; cropping 16 of 448 rows on each end fills the screen completely, with
 nothing cut. Not yet known: whether every game and video mode (480i, 480p, PAL) has the same bands.
 
-## Feature 2: one memory card per game (research, not implemented)
+## Feature 2: one memory card per game
 
-What is known, for the next step:
+The same logic as the PS1 emulator patch: the card is named after the **serial** read from `SYSTEM.CNF` of the disc
+(`SLUS-21345.VM2`), and a disc named `(Disc N)` (N from 2 to 9) uses the card of the `(Disc 1)` image with the same name
+when that image exists.
 
-* The card file name is built at `0x12abc4` as `"/savedata/vmc/" + name + ".VM2"` (format `%s%s.VM2`, `name` = argument
-  `r4`, slot = `r3`) and opened by `0x12a528(slot, 0, path, ...)`, which also accepts a ready path. The shared card on
-  the console is `/dev_hdd0/savedata/vmc/PS2.VM2` (8,650,752 bytes: 8 MB of data plus 16 bytes of ECC per 512 byte page).
-* Experiment 1 asked for the card under another file name (`PS2_T_PS2.VM2`): the emulator did **not** create it. So it
-  does not create a missing card by itself, or that name does not come through this path. Either way the cards have to
-  exist before the game starts (the installer can create them from the ISOs) and the emulator must fall back to the
-  shared card when the per-game one is missing.
-* The game serial is not known to the emulator side except through the disc: `0x1339dc` reads `SYSTEM.CNF` from the
-  emulated disc (root directory lookup, then the file into a buffer at `object + 0x1448`) and parses `PARAM4`/`VER`.
-  A hook right after that read can capture `BOOT2 = cdrom0:\SLUS_xxx.xx;1` into a spare byte buffer.
-* `/dev_hdd0/tmp/cfg.bin` (written by Cobra when the ISO is mounted) holds the ISO path, but the emulator image does not
-  read it, so multi-disc grouping by file name is not available on this side. Discs with different serials get
-  different cards.
+How it works (`cave_card.py`): `0x12a528(slot, 0, path, ...)` receives the card path in `r5`. For memory card 1 and a
+path in `/savedata/vmc/` (the shared card of ISO games) the hook
+
+1. reads `/tmp/cfg.bin`, which Cobra fills with the path of the mounted ISO, with the emulator's own file calls
+   (`0x1ecc5c` open, `0x1ed5cc` read at an offset, `0x1ecb10` close, the ones it uses for `ps2bootparam.dat`);
+2. opens the image, reads the volume descriptor, walks the root directory record by record and reads `SYSTEM.CNF`;
+3. turns `BOOT2 = cdrom0:\SLUS_213.45;1` into `SLUS-21345` and points `r5` at `/savedata/vmc/SLUS-21345.VM2`.
+
+Anything it does not understand leaves the shared card. It uses a 512 byte stack frame and one 256 byte buffer.
+
+Findings on the console (Grandia III disc 2):
+
+* Redirecting `r5` works: a fixed path to a card made by `ps2card.py` was loaded, and the game saved in it.
+* The emulator does **not** create a missing card, so the cards must exist. The installer creates them (below).
+* Calling the emulator's file functions from the hook is safe when the frame and the reads are small (a first version
+  with a 2.8 KB frame and 2 KB reads took the console down).
+* The card file date does not move when the emulator writes: compare hashes, not dates.
+
+`ps2card.py` builds a blank formatted card (`.VM2`: 8 MB of data plus 16 ECC bytes per page); the ECC rule was fitted on
+all 1265 written pages of a real card and the blank card reproduces its superblock page exactly. `copy_save` copies a save
+between cards (verified byte for byte). The installer (`installer/source/cards.cpp`) scans `/dev_hdd0/PS2ISO`, finds the
+serial of each image with the same disc 1 rule and creates the cards that do not exist (it never touches an existing one).
+
+Saves kept in the old shared `PS2.VM2` do not appear in a new per-game card. To start a game with its save, copy it into
+the card with `ps2card.copy_save`.
 
 ## Install
 
