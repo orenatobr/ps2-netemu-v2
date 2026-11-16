@@ -28,9 +28,9 @@ NAME_PREFIX = b"PS2_"
 CFG_PATH = b"/tmp/cfg.bin"
 SUFFIX = b".VM2"
 FRAME, S_FD, S_N, S_BUF, BUF_SIZE = 0x1D0, 0xB0, 0xB8, 0xC0, 0x100
-MAX_NAME = 60
-PATH_SIZE = 96
-DATA_SIZE = 16 + PATH_SIZE
+MAX_NAME = 52  # 14 + 4 + 52 + 5 bytes fit PATH_SIZE
+PATH_SIZE = 80
+DATA_SIZE = 16  # only the read-only path of /tmp/cfg.bin: the code page is never written to
 
 
 def sanitize(c: str) -> str:
@@ -70,9 +70,13 @@ def card_path(iso_path: str) -> str:
     return f"/savedata/vmc/PS2_{name}.VM2" if name else ""
 
 
-def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
-    """Return the (va, old, new, what) patches and the bytes used from `cave_va`."""
-    cfg_va, path_va = cave_va, cave_va + 16
+def build(cave_va: int, scratch_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
+    """Return the (va, old, new, what) patches and the bytes used from `cave_va`.
+
+    `scratch_va` is writable data memory (PATH_SIZE bytes) where the card path is built. Every build that stored into the code
+    page took the console down; the ones that only read from it did not.
+    """
+    cfg_va, path_va = cave_va, scratch_va
     code_va = cave_va + DATA_SIZE
     save = [("std", f"r{n}", 0x70 + 8 * (n - 3), "r1") for n in range(3, 11)]
     load = [("ld", f"r{n}", 0x70 + 8 * (n - 3), "r1") for n in range(3, 11)]
@@ -102,8 +106,9 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         ("lbz", "r0", 0, "r6"), ("cmpwi", "r0", 0x2E), ("beq", "cut"), ("addi", "r6", "r6", -1), ("b", "ext"),
         ("label", "cut"), ("mr", "r4", "r6"),
         ("label", "noext"),
-        ("lis", "r9", (path_va + len(PREFIX) + len(NAME_PREFIX)) >> 16),
-        ("ori", "r9", "r9", (path_va + len(PREFIX) + len(NAME_PREFIX)) & 0xFFFF), ("li", "r10", 0),
+        ("lis", "r8", path_va >> 16), ("ori", "r8", "r8", path_va & 0xFFFF),
+        *[x for i, ch in enumerate(PREFIX + NAME_PREFIX) for x in (("li", "r0", ch), ("stb", "r0", i, "r8"))],
+        ("addi", "r9", "r8", len(PREFIX) + len(NAME_PREFIX)), ("li", "r10", 0),
         ("label", "cp"),
         ("cmpw", "r5", "r4"), ("bge", "endcopy"), ("lbz", "r0", 0, "r5"),
         ("cmpwi", "r0", 0x28), ("beq", "tag"), ("cmpwi", "r0", 0x5B), ("bne", "plain"),
@@ -146,7 +151,7 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         ("mfcr", "r12"), ("b", RESUME),
     ]
     words = assemble(code_va, lines)
-    data = CFG_PATH.ljust(16, b"\0") + (PREFIX + NAME_PREFIX).ljust(PATH_SIZE, b"\0")
+    data = CFG_PATH.ljust(16, b"\0")
     patches = [(cave_va + i, 0, int.from_bytes(data[i:i + 4], "big"), "card cave data") for i in range(0, len(data), 4)]
     patches += [(code_va + 4 * i, 0, w, "card cave code") for i, w in enumerate(words)]
     patches.append((HOOK_VA, HOOK_STOCK, assemble(HOOK_VA, [("b", code_va)])[0], "jump to the card cave"))

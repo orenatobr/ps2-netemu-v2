@@ -30,6 +30,8 @@ CAVE_SIZE = 0x6C0
 CARD_CAVE_VA = CAVE_VA + 0xA0  # the crop cave uses the first 0x98 bytes
 SERIAL_CAVE_VA = CAVE_VA + 0x200  # the serial capture (528 bytes); the card cave of the serial plan sits at CARD_CAVE_VA
 PATH_VA = CAVE_VA + 0x440  # 64 bytes: the card path of the disc, empty when none
+SCRATCH_VA = 0x74E940  # writable: the unused tail of the last page of the data segment (made official by extend_data)
+SCRATCH_EXTRA = 0x100
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,27 @@ def extend_text(elf: bytes, extra: int = CAVE_SIZE) -> bytes:
             raise ValueError("the extended text segment would overlap the next segment")
     out = bytearray(elf)
     struct.pack_into(">QQ", out, e_phoff + 32, new, new)
+    return bytes(out)
+
+
+def extend_data(elf: bytes, extra: int = SCRATCH_EXTRA) -> bytes:
+    """Grow the second loadable segment (RW data) by `extra` zero bytes: scratch memory for the card path.
+
+    The segment ends at 0x74e930 and its last page is mapped up to 0x74f000, with nothing referring into the tail; the next
+    segment is far away in memory and 0x26d0 bytes later in the file.
+    """
+    e_phoff, = struct.unpack(">Q", elf[0x20:0x28])
+    phentsize, phnum = struct.unpack(">HH", elf[0x36:0x3A])
+    p_type, _f, p_off, p_va, _pa, p_filesz, p_memsz, _al = struct.unpack(
+        ">IIQQQQQQ", elf[e_phoff + phentsize:e_phoff + 2 * phentsize])
+    if p_type != 1 or p_filesz != p_memsz or (p_va + p_filesz + extra) > ((p_va + p_filesz + 0xFFF) & ~0xFFF):
+        raise ValueError("program header 1 is not the plain data segment, or the extension leaves its last page")
+    if phnum > 2:
+        _t, _f2, nxt_off, *_ = struct.unpack(">IIQQQQQQ", elf[e_phoff + 2 * phentsize:e_phoff + 3 * phentsize])
+        if p_off + p_filesz + extra > nxt_off:
+            raise ValueError("the extended data segment would overlap the next file segment")
+    out = bytearray(elf)
+    struct.pack_into(">QQ", out, e_phoff + phentsize + 32, p_filesz + extra, p_memsz + extra)
     return bytes(out)
 
 
@@ -152,7 +175,7 @@ def static_card_edits(name: bytes = b"PS2_SLUS-21345") -> tuple[Edit, ...]:
 def file_card_edits() -> tuple[Edit, ...]:
     """Feature: one memory card per game, named after the ISO and shared by its discs (cave_cardfile). It only uses the
     redirect of the card path and the read of /tmp/cfg.bin, both proven on the console."""
-    patches, used = cave_cardfile.build(CARD_CAVE_VA)
+    patches, used = cave_cardfile.build(CARD_CAVE_VA, SCRATCH_VA)
     if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
         raise ValueError("the card cave does not fit in the text page")
     return cave_edits(patches)
@@ -163,7 +186,7 @@ def probe_edits() -> tuple[Edit, ...]:
     return cave_edits(cave_probe.build(CARD_CAVE_VA)[0])
 
 
-def main(src: str, dst: str, edits: tuple[Edit, ...]) -> None:
+def main(src: str, dst: str, edits: tuple[Edit, ...], scratch: bool = False) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     with open(src, "rb") as fh:
         orig = fh.read()
@@ -172,6 +195,8 @@ def main(src: str, dst: str, edits: tuple[Edit, ...]) -> None:
     elf = selfio.unpack(orig)
     if any(e.va >= CAVE_VA for e in edits):  # only grow the segment when code lives in the cave
         elf = extend_text(elf)
+    if scratch:
+        elf = extend_data(elf)
     out = selfio.repack(orig, apply_edits(elf, edits))
     with open(dst, "wb") as fh:
         fh.write(out)
@@ -200,4 +225,6 @@ if __name__ == "__main__":
         chosen = crop_edits() + serial_card_edits()
     else:
         chosen = crop_edits() + file_card_edits()
-    main(sys.argv[1], sys.argv[2], chosen)
+    main(sys.argv[1], sys.argv[2], chosen, scratch=chosen is not EXPERIMENT and not any(
+        a in sys.argv for a in ("--serial-card", "--static-card", "--iso-card", "--probe", "--crop-only", "--debug-card"))
+        and not any(a.startswith("--stop-after=") for a in sys.argv))

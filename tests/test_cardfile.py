@@ -35,7 +35,7 @@ def patched() -> bytes:
     path = os.environ.get("PS2_NETEMU_SELF")
     if not path:
         pytest.skip("stock SELF not provided")
-    return P.apply_edits(P.extend_text(S.unpack(Path(path).read_bytes())), P.crop_edits() + P.file_card_edits())
+    return P.apply_edits(P.extend_data(P.extend_text(S.unpack(Path(path).read_bytes()))), P.crop_edits() + P.file_card_edits())
 
 
 class Files:
@@ -87,7 +87,7 @@ def test_the_card_matches_the_reference_rule(patched, iso):
 
 
 def test_every_disc_of_a_game_gets_the_same_card(patched):
-    paths = {hook(patched, Files(cfg(f"/dev_hdd0/PS2ISO/Grandia III (USA) (Disc {n}).iso"))).cstr(P.CARD_CAVE_VA + 16) for n in (1, 2, 3)}
+    paths = {hook(patched, Files(cfg(f"/dev_hdd0/PS2ISO/Grandia III (USA) (Disc {n}).iso"))).cstr(P.SCRATCH_VA) for n in (1, 2, 3)}
     assert paths == {"/savedata/vmc/PS2_Grandia_III__USA_.VM2"}
 
 
@@ -136,3 +136,25 @@ def test_everything_else_goes_through_untouched_and_without_touching_files(patch
 def test_reference_rule_examples():
     assert C.card_name("/x/Grandia III (USA) (Disc 2).iso") == "Grandia_III__USA_"
     assert C.card_name("/x/(Disc 1).iso") == ""
+
+
+@pytest.mark.parametrize("iso", CASES[:4] + ["/x/Missing.iso"])
+def test_nothing_is_ever_stored_into_the_code_page(patched, iso):
+    cpu = hook(patched, Files(cfg(iso)))
+    assert not [a for a in cpu.mem if P.CAVE_VA <= a < P.CAVE_VA + P.CAVE_SIZE]
+
+
+def test_the_path_is_built_inside_the_extended_data_segment(patched):
+    cpu = hook(patched, Files(cfg("/dev_hdd0/PS2ISO/Game.iso")))
+    assert cpu.r[5] == P.SCRATCH_VA and P.SCRATCH_VA + C.PATH_SIZE <= 0x74F000
+
+
+def test_the_data_segment_extension_stays_in_its_page_and_changes_only_the_sizes():
+    path = os.environ.get("PS2_NETEMU_SELF")
+    if not path:
+        pytest.skip("stock SELF not provided")
+    elf = S.unpack(Path(path).read_bytes())
+    out = P.extend_data(elf)
+    assert len(out) == len(elf)
+    diff = [i for i in range(len(elf)) if elf[i] != out[i]]
+    assert diff and all(i < 0x400 for i in diff)
