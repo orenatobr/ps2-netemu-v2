@@ -21,38 +21,60 @@ bool isDiscTag(const std::string& s, std::size_t i) {
     return (s[i] == '(' || s[i] == '[') && (s.compare(i + 1, 4, "Disc") == 0 || s.compare(i + 1, 4, "disc") == 0);
 }
 
-bool keep(unsigned char c) {
-    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == '_';
-}
-
 }  // namespace
 
-std::string cardTitle(const std::string& isoName) {
+std::string gameTitle(const std::string& isoName) {
     std::string base = isoName.substr(isoName.rfind('/') == std::string::npos ? 0 : isoName.rfind('/') + 1);
     const std::size_t dot = base.rfind('.');
     if (dot != std::string::npos && dot > 0 && base.size() - dot <= 5) base.resize(dot);
     std::string out;
     for (std::size_t i = 0; i < base.size();) {
         if (isDiscTag(base, i)) {
-            while (i < base.size()) {
-                const char c = base[i++];
-                if (c == ')' || c == ']') break;
-            }
+            while (i < base.size() && base[i] != ')' && base[i] != ']') ++i;
+            if (i < base.size()) ++i;
             if (!out.empty() && out.back() == ' ') out.pop_back();
             continue;
         }
-        if (out.size() >= kMaxTitle) break;
         out += base[i++];
     }
     while (!out.empty() && out.back() == ' ') out.pop_back();
-    for (char& c : out)
-        if (!keep(static_cast<unsigned char>(c))) c = '_';
     return out;
 }
 
-std::string cardFileName(const std::string& isoName) {
-    const std::string title = cardTitle(isoName);
-    return title.empty() ? "" : "PS2_" + title + ".VM2";
+std::string slotCardName(int slot) {
+    char buf[24];
+    std::snprintf(buf, sizeof buf, "PS2_C%02d.VM2", slot);
+    return buf;
+}
+
+std::vector<Entry> readTable(const std::string& path) {
+    std::vector<Entry> out;
+    Bytes raw;
+    if (!fsx::readBytes(path, raw)) return out;
+    for (std::size_t at = 0; at + kRecord <= raw.size() && raw[at + 1] != 0; at += kRecord) {
+        std::string name(reinterpret_cast<const char*>(&raw[at + 1]), kRecord - 1);
+        name.resize(name.find('\0'));
+        out.push_back({raw[at], name});
+    }
+    return out;
+}
+
+bool writeTable(const std::string& path, const std::vector<Entry>& entries) {
+    Bytes raw;
+    for (const Entry& e : entries) {
+        if (e.slot < 0 || e.slot >= kSlots || e.name.empty() || e.name.size() > kRecord - 2) return false;
+        Bytes rec(kRecord, 0);
+        rec[0] = static_cast<std::uint8_t>(e.slot);
+        std::copy(e.name.begin(), e.name.end(), rec.begin() + 1);
+        raw.insert(raw.end(), rec.begin(), rec.end());
+    }
+    raw.insert(raw.end(), kRecord, 0);
+    const std::string tmp = path + ".new";
+    if (!fsx::writeBytes(tmp, raw) || !fsx::renameFile(tmp, path)) {
+        fsx::removeFile(tmp);
+        return false;
+    }
+    return true;
 }
 
 bool writeBlankCard(const std::string& path, const Bytes& head) {
@@ -78,13 +100,30 @@ bool writeBlankCard(const std::string& path, const Bytes& head) {
 std::vector<std::string> ensureCards(const std::string& isoDir, const std::string& vmcDir, const Bytes& head) {
     std::vector<std::string> made;
     fsx::makeDirs(vmcDir);
+    const std::string tablePath = vmcDir + "/PS2_CARDS.TBL";
+    std::vector<Entry> table = readTable(tablePath);
+    const std::size_t before = table.size();
     std::vector<std::string> names = fsx::listDir(isoDir);
     std::sort(names.begin(), names.end());
     for (const std::string& name : names) {
         if (!lowerExt(name, ".iso") && !lowerExt(name, ".bin")) continue;
-        const std::string card = cardFileName(name);
-        if (card.empty() || fsx::exists(vmcDir + "/" + card)) continue;
-        if (writeBlankCard(vmcDir + "/" + card, head)) made.push_back(card);
+        const std::string title = gameTitle(name);
+        if (title.empty() || name.size() > kRecord - 2) continue;
+        if (std::any_of(table.begin(), table.end(), [&](const Entry& e) { return e.name == name; })) continue;
+        int slot = -1;
+        for (const Entry& e : table)
+            if (gameTitle(e.name) == title) slot = e.slot;
+        for (int s = 0; slot < 0 && s < kSlots; ++s)
+            if (std::none_of(table.begin(), table.end(), [&](const Entry& e) { return e.slot == s; })) slot = s;
+        if (slot >= 0) table.push_back({slot, name});
+    }
+    if (table.size() != before && !writeTable(tablePath, table)) return made;
+    std::vector<bool> done(kSlots, false);
+    for (const Entry& e : table) {
+        if (done[e.slot]) continue;
+        done[e.slot] = true;
+        const std::string card = slotCardName(e.slot);
+        if (!fsx::exists(vmcDir + "/" + card) && writeBlankCard(vmcDir + "/" + card, head)) made.push_back(card);
     }
     return made;
 }

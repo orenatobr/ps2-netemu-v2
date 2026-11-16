@@ -14,7 +14,7 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 | Safe installer (backup, hash checks, restore) | In the package |
 | Installer creating the cards and the table from the ISOs | In the package (host tests pass; the table and the card of the tested game were put by hand over FTP) |
 
-Limits: 32 games (the 33rd and later keep the shared `PS2.VM2`); an ISO file name longer than 126 bytes is left on the shared
+Limits: the cards and the table are made by the app, not when a game starts: after adding ISOs, open the app and press Cross again (a game without a card uses the shared `PS2.VM2`). 32 games (the 33rd and later keep the shared `PS2.VM2`); an ISO file name longer than 126 bytes is left on the shared
 card; cards are named by slot (`PS2_C00.VM2`), the file `PS2_CARDS.TBL` says which game each one is.
 
 ## What it is
