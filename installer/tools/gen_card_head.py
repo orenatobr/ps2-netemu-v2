@@ -8,7 +8,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-import ps2card  # noqa: E402
+import ps2card
 
 HEAD_PAGES = 84  # superblock, indirect FAT, 32 FAT clusters and the root directory cluster end at page 83
 card = ps2card.blank_card()

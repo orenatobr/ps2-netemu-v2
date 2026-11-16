@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import cave_card
 import cave_crop
+import cave_probe
 import selfio
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,11 @@ def card_edits(debug: bool = False) -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
+def probe_edits() -> tuple[Edit, ...]:
+    """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe)."""
+    return cave_edits(cave_probe.build(CARD_CAVE_VA)[0])
+
+
 def main(src: str, dst: str, edits: tuple[Edit, ...]) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     with open(src, "rb") as fh:
@@ -141,6 +147,8 @@ if __name__ == "__main__":
         sys.exit(__doc__)
     if "--experiment" in sys.argv:
         chosen = EXPERIMENT
+    elif "--probe" in sys.argv:
+        chosen = crop_edits() + probe_edits()
     elif "--debug-card" in sys.argv:
         chosen = crop_edits() + card_edits(debug=True)
     elif "--crop-only" in sys.argv:
