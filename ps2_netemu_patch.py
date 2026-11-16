@@ -136,6 +136,18 @@ def serial_card_edits() -> tuple[Edit, ...]:
     return cave_edits(serial + name)
 
 
+def static_card_edits(name: bytes = b"PS2_SLUS-21345") -> tuple[Edit, ...]:
+    """EXPERIMENT: memory card 1 always goes to /savedata/vmc/<name>.VM2, with no serial logic at all (cave_cardname with the
+    path written in the cave). Tells whether a card with that name is safe, apart from the serial capture."""
+    path = b"/savedata/vmc/" + name + b".VM2"
+    patches, used = cave_cardname.build(CARD_CAVE_VA, PATH_VA)
+    blob = path.ljust(64, b"\0")
+    data = [(PATH_VA + i, 0, int.from_bytes(blob[i:i + 4], "big"), "fixed card path") for i in range(0, 64, 4)]
+    if CARD_CAVE_VA + used > SERIAL_CAVE_VA:
+        raise ValueError("the card cave overlaps the next one")
+    return cave_edits(patches + data)
+
+
 def probe_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe)."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA)[0])
@@ -166,6 +178,8 @@ if __name__ == "__main__":
         chosen = crop_edits() + card_edits(stop_after=stage)
     elif "--debug-card" in sys.argv:
         chosen = crop_edits() + card_edits(debug=True)
+    elif "--static-card" in sys.argv:
+        chosen = crop_edits() + static_card_edits()
     elif "--iso-card" in sys.argv:
         chosen = crop_edits() + card_edits()
     elif "--probe" in sys.argv:

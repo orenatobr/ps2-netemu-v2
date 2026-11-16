@@ -127,3 +127,21 @@ def test_without_a_serial_the_shared_card_stays(patched):
 def test_everything_else_goes_through_untouched(patched, slot, r4, p):
     cpu = hook(patched, slot, r4, p, GAME)
     assert cpu.r[5] == (0 if p is None else BUF)
+
+
+def test_the_static_card_experiment_always_points_slot_1_at_the_fixed_path():
+    stock = Path(os.environ.get("PS2_NETEMU_SELF", ""))
+    if not stock.is_file():
+        pytest.skip("stock SELF not provided")
+    patched = P.apply_edits(P.extend_text(S.unpack(stock.read_bytes())), P.crop_edits() + P.static_card_edits())
+
+    def run(slot: int) -> Cpu:
+        cpu = Cpu(patched)  # the fixed path is in the patched image: nothing is written to the cave memory
+        cpu.r[3], cpu.r[4], cpu.r[5] = slot, 0, BUF
+        for i, b in enumerate(b"/savedata/vmc/PS2.VM2\0"):
+            cpu.mem[BUF + i] = b
+        assert cpu.run(C.HOOK_VA, {C.RESUME}) == C.RESUME
+        return cpu
+
+    assert run(0).cstr(run(0).r[5]) == "/savedata/vmc/PS2_SLUS-21345.VM2"
+    assert run(1).r[5] == BUF
