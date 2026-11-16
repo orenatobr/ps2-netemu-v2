@@ -214,3 +214,39 @@ def test_everything_else_goes_through_untouched_and_without_touching_files(patch
     fs = Fs({"/tmp/cfg.bin": cfg(G2), G2: iso(cnf())})
     cpu = hook(patched, fs, slot, r4, p)
     assert cpu.r[5] == (0 if p is None else BUF) and fs.log == []
+
+
+@pytest.fixture(scope="module")
+def debug_patched() -> bytes:
+    path = os.environ.get("PS2_NETEMU_SELF")
+    if not path:
+        pytest.skip("stock SELF not provided")
+    return P.apply_edits(P.extend_text(S.unpack(Path(path).read_bytes())), P.crop_edits() + P.card_edits(debug=True))
+
+
+def marker(cpu: Cpu) -> str:
+    return "" if cpu.r[5] == BUF else cpu.cstr(cpu.r[5]).removeprefix("/savedata/vmc/").removesuffix(".VM2")
+
+
+@pytest.mark.parametrize("files,stage", [
+    ({}, "DBG_A"),
+    ({"/tmp/cfg.bin": b""}, "DBG_B"),
+    ({"/tmp/cfg.bin": b"\x02\0\0\0\0\0\0\0"}, "DBG_C"),
+    ({"/tmp/cfg.bin": cfg("/x/Missing.iso")}, "DBG_D"),
+    ({"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(cnf(), magic=b"XXXXX")}, "DBG_E"),
+    ({"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(None)}, "DBG_G"),
+    ({"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(b"BOOT = cdrom:\\SLUS_006.62;1\r\n")}, "DBG_I"),
+])
+def test_the_debug_build_marks_the_stage_where_it_gave_up(debug_patched, files, stage):
+    fs = Fs(files)
+    assert marker(hook(debug_patched, fs)) == stage
+    assert not fs.fds
+
+
+def test_the_debug_build_marks_a_path_outside_the_vmc_folder(debug_patched):
+    assert marker(hook(debug_patched, Fs({}), p="/dev_hdd0/savedata/vmc/PS2.VM2")) == "DBG_Y"
+
+
+def test_the_debug_build_still_gives_the_serial_when_everything_works(debug_patched):
+    fs = Fs({"/tmp/cfg.bin": cfg(G2), G2: iso(cnf())})
+    assert marker(hook(debug_patched, fs)) == "SLUS-21345"

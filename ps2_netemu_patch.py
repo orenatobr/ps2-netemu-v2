@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 STOCK_SHA256 = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a"
 CAVE_VA = 0x2FF940  # first free byte after the stock text segment; the page is mapped up to 0x300000
 CAVE_SIZE = 0x6C0
-CARD_CAVE_VA = CAVE_VA + 0x100  # the crop cave uses the first 0x100 bytes
+CARD_CAVE_VA = CAVE_VA + 0xA0  # the crop cave uses the first 0x98 bytes
 
 
 @dataclass(frozen=True)
@@ -113,9 +113,9 @@ def crop_edits() -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
-def card_edits() -> tuple[Edit, ...]:
+def card_edits(debug: bool = False) -> tuple[Edit, ...]:
     """Feature: one memory card file per game, named after the ISO and shared by its discs (see cave_card)."""
-    patches, used = cave_card.build(CARD_CAVE_VA)
+    patches, used = cave_card.build(CARD_CAVE_VA, debug)
     if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
         raise ValueError("the card cave does not fit in the text page")
     return cave_edits(patches)
@@ -141,6 +141,8 @@ if __name__ == "__main__":
         sys.exit(__doc__)
     if "--experiment" in sys.argv:
         chosen = EXPERIMENT
+    elif "--debug-card" in sys.argv:
+        chosen = crop_edits() + card_edits(debug=True)
     elif "--crop-only" in sys.argv:
         chosen = crop_edits()
     else:

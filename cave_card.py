@@ -71,8 +71,12 @@ def disc_one(iso_path: str) -> str | None:
     return None
 
 
-def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
-    """Return the (va, old, new, what) patches and the bytes used from `cave_va`."""
+def build(cave_va: int, debug: bool = False) -> tuple[list[tuple[int, int, int, str]], int]:
+    """Return the (va, old, new, what) patches and the bytes used from `cave_va`.
+
+    With `debug`, every place where the cave gives up sends slot 1 to a card named `DBG_<stage letter>` instead of leaving the
+    shared card, so which stage failed can be read from the card file the game wrote to.
+    """
     cfg_va, path_va, const_va = cave_va, cave_va + 16, cave_va + 16 + PATH_SIZE
     code_va = cave_va + DATA_SIZE
 
@@ -86,17 +90,17 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         ("stdu", "r1", -FRAME, "r1"), ("mflr", "r0"), ("std", "r0", FRAME + 0x10, "r1"), *save,
         ("cmpwi", "r3", 0), ("bne", "restore"), ("cmpdi", "r4", 0), ("bne", "restore"), ("cmpdi", "r5", 0), ("beq", "restore"),
     ]
-    for i, c in enumerate(PREFIX):
-        lines += [("lbz", "r0", i, "r5"), ("cmpwi", "r0", c), ("bne", "restore")]
+    lines += [("mr", "r3", "r5"), ("lis", "r4", path_va >> 16), ("ori", "r4", "r4", path_va & 0xFFFF), ("li", "r5", len(PREFIX)),
+              ("bl", "memeq"), ("cmpwi", "r3", 0), ("beq", "f_Y")]  # PATH starts with the prefix
     lines += [  # 1. /tmp/cfg.bin
         ("li", "r3", 0), ("lis", "r4", cfg_va >> 16), ("ori", "r4", "r4", cfg_va & 0xFFFF), ("bl", OPEN),
-        ("cmpwi", "r3", 0), ("blt", "restore"), ("std", "r3", S_FD, "r1"),
+        ("cmpwi", "r3", 0), ("blt", "f_A"), ("std", "r3", S_FD, "r1"),
         ("li", "r4", 0), *sect, ("li", "r6", 0x100), ("bl", READ), ("std", "r3", S_SIZE, "r1"),
-        ("ld", "r3", S_FD, "r1"), ("bl", CLOSE), ("ld", "r3", S_SIZE, "r1"), ("cmpwi", "r3", 1), ("blt", "restore"),
+        ("ld", "r3", S_FD, "r1"), ("bl", CLOSE), ("ld", "r3", S_SIZE, "r1"), ("cmpwi", "r3", 1), ("blt", "f_B"),
         ("addi", "r11", "r1", S_SECT), ("li", "r0", 0), ("stb", "r0", 0xFF, "r11"), ("mr", "r4", "r11"), ("li", "r6", 0),
         ("label", "first"),  # the first '/' within the first four bytes
-        ("lbz", "r0", 0, "r4"), ("cmpwi", "r0", 0x2F), ("beq", "have"), ("cmpwi", "r0", 0), ("beq", "restore"),
-        ("addi", "r4", "r4", 1), ("addi", "r6", "r6", 1), ("cmpwi", "r6", 4), ("blt", "first"), ("b", "restore"),
+        ("lbz", "r0", 0, "r4"), ("cmpwi", "r0", 0x2F), ("beq", "have"), ("cmpwi", "r0", 0), ("beq", "f_C"),
+        ("addi", "r4", "r4", 1), ("addi", "r6", "r6", 1), ("cmpwi", "r6", 4), ("blt", "first"), ("b", "f_C"),
         ("label", "have"),  # copy the path twice (as is, and for the disc 1 variant)
         ("addi", "r9", "r1", S_ISO), ("addi", "r10", "r1", S_ISO2), ("li", "r6", 0), ("li", "r0", 0),
         ("std", "r0", S_DISC2, "r1"),
@@ -120,38 +124,38 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         ("ld", "r0", S_DISC2, "r1"), ("cmpwi", "r0", 0), ("beq", "open1"),
         ("li", "r3", 0), ("addi", "r4", "r1", S_ISO2), ("bl", OPEN), ("cmpwi", "r3", 0), ("bge", "opened"),
         ("label", "open1"),
-        ("li", "r3", 0), ("addi", "r4", "r1", S_ISO), ("bl", OPEN), ("cmpwi", "r3", 0), ("blt", "restore"),
+        ("li", "r3", 0), ("addi", "r4", "r1", S_ISO), ("bl", OPEN), ("cmpwi", "r3", 0), ("blt", "f_D"),
         ("label", "opened"), ("std", "r3", S_FD, "r1"),
         # 3. volume descriptor
         ("li", "r4", 0), ("ori", "r4", "r4", 0x8000), *sect, ("li", "r6", 0xB0), ("bl", READ), ("cmpwi", "r3", 0xB0),
-        ("bne", "closefail"),
+        ("bne", "f_E"),
         ("addi", "r3", "r1", S_SECT + 1), *const(C_CD001), ("li", "r5", 5), ("bl", "memeq"), ("cmpwi", "r3", 0),
-        ("beq", "closefail"),
+        ("beq", "f_E"),
         ("addi", "r11", "r1", S_SECT), ("li", "r12", 158), ("lwbrx", "r6", "r11", "r12"),  # root directory extent
         ("ld", "r3", S_FD, "r1"), ("mulli", "r4", "r6", SECTOR), *sect, ("li", "r6", SECTOR), ("bl", READ),
-        ("cmpwi", "r3", 0x100), ("blt", "closefail"),
+        ("cmpwi", "r3", 0x100), ("blt", "f_F"),
         ("addi", "r8", "r1", S_SECT), ("li", "r9", 0),
         ("label", "dir"),
-        ("cmpwi", "r9", SECTOR - 34), ("bge", "closefail"), ("add", "r10", "r8", "r9"), ("lbz", "r0", 0, "r10"),
-        ("cmpwi", "r0", 0), ("beq", "closefail"), ("lbz", "r11", 32, "r10"), ("cmpwi", "r11", 10), ("blt", "nextrec"),
+        ("cmpwi", "r9", SECTOR - 34), ("bge", "f_G"), ("add", "r10", "r8", "r9"), ("lbz", "r0", 0, "r10"),
+        ("cmpwi", "r0", 0), ("beq", "f_G"), ("lbz", "r11", 32, "r10"), ("cmpwi", "r11", 10), ("blt", "nextrec"),
         ("addi", "r3", "r10", 33), *const(C_CNF), ("li", "r5", 10), ("bl", "memeq"), ("cmpwi", "r3", 0), ("bne", "found"),
         ("label", "nextrec"), ("lbz", "r0", 0, "r10"), ("add", "r9", "r9", "r0"), ("b", "dir"),
         ("label", "found"),  # SYSTEM.CNF
         ("li", "r12", 2), ("lwbrx", "r6", "r10", "r12"),
         ("ld", "r3", S_FD, "r1"), ("mulli", "r4", "r6", SECTOR), *sect, ("li", "r6", 0x100), ("bl", READ),
         ("std", "r3", S_SIZE, "r1"), ("ld", "r3", S_FD, "r1"), ("bl", CLOSE),
-        ("ld", "r10", S_SIZE, "r1"), ("cmpwi", "r10", 1), ("blt", "restore"),
+        ("ld", "r10", S_SIZE, "r1"), ("cmpwi", "r10", 1), ("blt", "f_H"),
         # 4. BOOT2 = cdrom0:\SLUS_213.45;1  ->  SLUS-21345
         ("addi", "r8", "r1", S_SECT), ("li", "r6", 0),
         ("label", "boot"),
-        ("addi", "r7", "r6", 5), ("cmpw", "r7", "r10"), ("bgt", "restore"), ("add", "r3", "r8", "r6"), *const(C_BOOT2),
+        ("addi", "r7", "r6", 5), ("cmpw", "r7", "r10"), ("bgt", "f_I"), ("add", "r3", "r8", "r6"), *const(C_BOOT2),
         ("li", "r5", 5), ("bl", "memeq"), ("cmpwi", "r3", 0), ("bne", "colon0"), ("addi", "r6", "r6", 1), ("b", "boot"),
         ("label", "colon0"), ("addi", "r6", "r6", 5),
         ("label", "colon"),
-        ("cmpw", "r6", "r10"), ("bge", "restore"), ("add", "r7", "r8", "r6"), ("lbz", "r0", 0, "r7"), ("addi", "r6", "r6", 1),
+        ("cmpw", "r6", "r10"), ("bge", "f_I"), ("add", "r7", "r8", "r6"), ("lbz", "r0", 0, "r7"), ("addi", "r6", "r6", 1),
         ("cmpwi", "r0", 0x3A), ("bne", "colon"),
         ("label", "skip"),
-        ("cmpw", "r6", "r10"), ("bge", "restore"), ("add", "r7", "r8", "r6"), ("lbz", "r0", 0, "r7"),
+        ("cmpw", "r6", "r10"), ("bge", "f_I"), ("add", "r7", "r8", "r6"), ("lbz", "r0", 0, "r7"),
         ("cmpwi", "r0", 0x5C), ("beq", "skipnext"), ("cmpwi", "r0", 0x2F), ("bne", "name"),
         ("label", "skipnext"), ("addi", "r6", "r6", 1), ("b", "skip"),
         ("label", "name"),
@@ -167,12 +171,27 @@ def build(cave_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
         ("label", "keep"),
         ("stb", "r0", 0, "r9"), ("addi", "r9", "r9", 1), ("addi", "r11", "r11", 1), ("cmpwi", "r11", MAX_SERIAL), ("bge", "fin"),
         ("label", "skipchar"), ("addi", "r6", "r6", 1), ("b", "cp"),
-        ("label", "fin"), ("cmpwi", "r11", MIN_SERIAL), ("blt", "restore"),
+        ("label", "fin"), ("cmpwi", "r11", MIN_SERIAL), ("blt", "f_I"),
     ]
     for i, c in enumerate(SUFFIX + b"\0"):
         lines += [("li", "r0", c), ("stb", "r0", i, "r9")]
+    stubs: list[tuple] = []
+    for code in "ABCDHIY":  # the file is not open here (or not any more): leave, or mark
+        stubs += [("label", f"f_{code}")] + ([("li", "r0", ord(code)), ("b", "dbg")] if debug else [("b", "restore")])
+    for code in "EFG":  # the image is open: close it first
+        stubs += [("label", f"f_{code}")] + ([("li", "r0", ord(code)), ("b", "cdbg")] if debug else [("b", "closefail")])
+    if debug:
+        stubs += [("label", "cdbg"), ("std", "r0", S_SIZE, "r1"), ("ld", "r3", S_FD, "r1"), ("bl", CLOSE), ("ld", "r0", S_SIZE, "r1"),
+                  ("label", "dbg"), ("lis", "r9", (path_va + len(PREFIX)) >> 16), ("ori", "r9", "r9", (path_va + len(PREFIX)) & 0xFFFF)]
+        for i, c in enumerate(b"DBG_"):
+            stubs += [("li", "r11", c), ("stb", "r11", i, "r9")]
+        stubs += [("stb", "r0", 4, "r9")]
+        for i, c in enumerate(SUFFIX + b"\0"):
+            stubs += [("li", "r11", c), ("stb", "r11", 5 + i, "r9")]
+        stubs += [("lis", "r5", path_va >> 16), ("ori", "r5", "r5", path_va & 0xFFFF), ("std", "r5", 0x80, "r1"), ("b", "restore")]
     lines += [
         ("lis", "r5", path_va >> 16), ("ori", "r5", "r5", path_va & 0xFFFF), ("std", "r5", 0x80, "r1"), ("b", "restore"),
+        *stubs,
         ("label", "closefail"), ("ld", "r3", S_FD, "r1"), ("bl", CLOSE),
         ("label", "restore"), *load, ("ld", "r0", FRAME + 0x10, "r1"), ("addi", "r1", "r1", FRAME), ("mtlr", "r0"),
         ("mfcr", "r12"), ("b", RESUME),
