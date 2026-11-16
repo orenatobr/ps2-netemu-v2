@@ -267,3 +267,35 @@ def test_the_debug_build_marks_a_path_outside_the_vmc_folder(debug_patched):
 
 def test_the_debug_build_still_gives_the_serial_when_everything_works(debug_patched):
     assert marker(hook(debug_patched, Fs({"/tmp/cfg.bin": cfg(G2), G2: iso(cnf())}))) == "SLUS-21345"
+
+
+@pytest.fixture(scope="module")
+def ladder() -> dict:
+    path = os.environ.get("PS2_NETEMU_SELF")
+    if not path:
+        pytest.skip("stock SELF not provided")
+    base = P.extend_text(S.unpack(Path(path).read_bytes()))
+    return {n: P.apply_edits(base, P.crop_edits() + P.card_edits(stop_after=n)) for n in ("pvd", "dir", "cnf")}
+
+
+GOOD = {"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(cnf())}
+
+
+@pytest.mark.parametrize("stage", ["pvd", "dir", "cnf"])
+def test_a_stage_that_works_sends_slot_1_to_the_test_card(ladder, stage):
+    fs = Fs(GOOD)
+    cpu = hook(ladder[stage], fs)
+    assert cpu.cstr(cpu.r[5]) == "/savedata/vmc/PS2_TEST.VM2" and not fs.fds
+
+
+@pytest.mark.parametrize("stage,files", [
+    ("pvd", {"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(cnf(), magic=b"XXXXX")}),
+    ("pvd", {"/tmp/cfg.bin": cfg("/x/Missing.iso")}),
+    ("dir", {"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(None)}),
+    ("cnf", {"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(b"BOOT = cdrom:\\SLUS_006.62;1\r\n")}),
+])
+def test_a_stage_that_fails_leaves_the_shared_card_and_closes_the_image(ladder, stage, files):
+    fs = Fs(files)
+    cpu = hook(ladder[stage], fs)
+    assert cpu.r[5] == BUF or stage == "cnf" and cpu.cstr(cpu.r[5]) == "/savedata/vmc/PS2_TEST.VM2"
+    assert not fs.fds

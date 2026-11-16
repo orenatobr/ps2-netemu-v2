@@ -73,11 +73,16 @@ def disc_one(iso_path: str) -> str | None:
     return None
 
 
-def build(cave_va: int, debug: bool = False) -> tuple[list[tuple[int, int, int, str]], int]:
+def build(cave_va: int, debug: bool = False, stop_after: str | None = None) -> tuple[list[tuple[int, int, int, str]], int]:
     """Return the (va, old, new, what) patches and the bytes used from `cave_va`.
 
     With `debug`, every place where the cave gives up sends slot 1 to the card `DBG_<stage letter>` instead of leaving the
-    shared card, so the stage that failed can be read from the card file the game wrote to.
+    shared card, so the stage that failed can be read from the card file the game wrote to. (Both debug builds took the console
+    down, so it is not used on the console.)
+
+    With `stop_after` ("pvd", "dir" or "cnf") the cave stops once that stage worked and sends slot 1 to
+    `/savedata/vmc/PS2_TEST.VM2`; a stage that fails leaves the shared card. Which file the game writes to tells how far the
+    cave got, with no marker card.
     """
     cfg_va, path_va, const_va = cave_va, cave_va + 16, cave_va + 16 + PATH_SIZE
     code_va = cave_va + DATA_SIZE
@@ -107,6 +112,7 @@ def build(cave_va: int, debug: bool = False) -> tuple[list[tuple[int, int, int, 
         ("ld", "r3", S_FD, "r1"), ("li", "r4", 0), ("ori", "r4", "r4", 0x8000), ("addi", "r5", "r1", S_BUF), ("li", "r6", ALIGN),
         ("bl", READ), ("cmpwi", "r3", ALIGN), ("bne", "f_E"),
         ("addi", "r3", "r1", S_BUF + 1), *const(C_CD001), ("li", "r5", 5), ("bl", "memeq"), ("cmpwi", "r3", 0), ("beq", "f_E"),
+        *([("b", "probe_close")] if stop_after == "pvd" else []),
         ("addi", "r11", "r1", S_BUF), ("li", "r12", 158), ("lwbrx", "r6", "r11", "r12"), ("mulli", "r6", "r6", SECTOR),
         ("std", "r6", S_OFF, "r1"), ("li", "r12", 166), ("lwbrx", "r7", "r11", "r12"), ("cmpwi", "r7", SECTOR), ("ble", "lenok"),
         ("li", "r7", SECTOR),
@@ -125,10 +131,12 @@ def build(cave_va: int, debug: bool = False) -> tuple[list[tuple[int, int, int, 
         ("label", "nextsector"),  # the rest of this sector is padding
         ("ld", "r9", S_POS, "r1"), ("ori", "r9", "r9", 0x7FF), ("addi", "r9", "r9", 1), ("std", "r9", S_POS, "r1"), ("b", "dir"),
         ("label", "found"),  # 5. SYSTEM.CNF: 512 bytes at its sector
+        *([("b", "probe_close")] if stop_after == "dir" else []),
         ("ld", "r8", S_REC, "r1"), ("li", "r12", 2), ("lwbrx", "r6", "r8", "r12"), ("mulli", "r4", "r6", SECTOR),
         ("ld", "r3", S_FD, "r1"), ("addi", "r5", "r1", S_BUF), ("li", "r6", ALIGN), ("bl", READ),
         ("std", "r3", S_N, "r1"), ("ld", "r3", S_FD, "r1"), ("bl", CLOSE),
         ("ld", "r10", S_N, "r1"), ("cmpwi", "r10", 1), ("blt", "f_H"),
+        *([("b", "probe_ok")] if stop_after == "cnf" else []),
         # 6. BOOT2 = cdrom0:\SLUS_213.45;1  ->  SLUS-21345
         ("addi", "r8", "r1", S_BUF), ("li", "r6", 0),
         ("label", "boot"),
@@ -173,6 +181,13 @@ def build(cave_va: int, debug: bool = False) -> tuple[list[tuple[int, int, int, 
         lines += [("stb", "r0", 4, "r9")]
         for i, c in enumerate(SUFFIX + b"\0"):
             lines += [("li", "r11", c), ("stb", "r11", 5 + i, "r9")]
+        lines += [("lis", "r5", path_va >> 16), ("ori", "r5", "r5", path_va & 0xFFFF), ("std", "r5", 0x80, "r1"), ("b", "restore")]
+    if stop_after:
+        lines += [("label", "probe_close"), ("ld", "r3", S_FD, "r1"), ("bl", CLOSE),
+                  ("label", "probe_ok"), ("lis", "r9", (path_va + len(PREFIX)) >> 16),
+                  ("ori", "r9", "r9", (path_va + len(PREFIX)) & 0xFFFF)]
+        for i, c in enumerate(b"PS2_TEST.VM2\0"):
+            lines += [("li", "r0", c), ("stb", "r0", i, "r9")]
         lines += [("lis", "r5", path_va >> 16), ("ori", "r5", "r5", path_va & 0xFFFF), ("std", "r5", 0x80, "r1"), ("b", "restore")]
     lines += [
         ("label", "restore"), *load, ("ld", "r0", FRAME + 0x10, "r1"), ("addi", "r1", "r1", FRAME), ("mtlr", "r0"),
