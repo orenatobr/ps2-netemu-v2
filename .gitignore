@@ -10,3 +10,4 @@ installer/build/
 installer/payload/*.bin
 installer/*.elf
 installer/*.map
+local-builds/
