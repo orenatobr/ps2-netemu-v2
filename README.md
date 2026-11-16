@@ -5,11 +5,18 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 
 ## Status
 
+**The published package (`latest`, `ps2_netemu_v2.00.pkg`) contains only the image fix.** The per-game memory card is not in it.
+
 | Feature | State |
 |---|---|
-| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | **Confirmed on the console**: the screen is 100% filled |
-| One memory card per game, named after the game serial, shared by the discs of a game | In test on the console (see below) |
-| Safe installer (backup, hash checks, restore, creates the missing cards) | Done; the card creation is tested on the host only |
+| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | **In the published package. Confirmed on the console**: the screen is 100% filled |
+| One memory card per game | **Not published, not working yet.** Redirecting the card to a fixed file works; choosing the file by the disc serial has taken the console down in tests, see below |
+| Safe installer (backup, hash checks, restore) | In the published package |
+| Installer creating the missing per-game cards from the ISOs | In the repository (host tests pass), not in the published package |
+
+Known limitation of the card work: discs of the same game with different serials (Grandia III disc 1 is `SLUS-21334`, disc 2
+is `SLUS-21345`) would get different cards, because the emulator side cannot see the ISO file names without reading the ISO
+from inside the emulator, which is the part that failed on the console. The PS1 patch groups them by the `(Disc N)` name.
 
 ## What it is
 
