@@ -15,6 +15,7 @@ import struct
 import sys
 from dataclasses import dataclass
 
+import cave_card
 import cave_crop
 import selfio
 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 STOCK_SHA256 = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a"
 CAVE_VA = 0x2FF940  # first free byte after the stock text segment; the page is mapped up to 0x300000
 CAVE_SIZE = 0x6C0
+CARD_CAVE_VA = CAVE_VA + 0x100  # the crop cave uses the first 0x100 bytes
 
 
 @dataclass(frozen=True)
@@ -111,6 +113,14 @@ def crop_edits() -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
+def card_test_edits(path: bytes = b"/savedata/vmc/PS2_TEST.VM2") -> tuple[Edit, ...]:
+    """EXPERIMENT: send memory card 1 to a fixed file, to learn from outside whether the hook is on the path."""
+    patches, used = cave_card.build(CARD_CAVE_VA, path)
+    if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the card cave does not fit in the text page")
+    return cave_edits(patches)
+
+
 def main(src: str, dst: str, edits: tuple[Edit, ...]) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     with open(src, "rb") as fh:
@@ -129,5 +139,10 @@ def main(src: str, dst: str, edits: tuple[Edit, ...]) -> None:
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         sys.exit(__doc__)
-    chosen = EXPERIMENT if "--experiment" in sys.argv else crop_edits()
+    if "--experiment" in sys.argv:
+        chosen = EXPERIMENT
+    elif "--card-test" in sys.argv:
+        chosen = crop_edits() + card_test_edits()
+    else:
+        chosen = crop_edits()
     main(sys.argv[1], sys.argv[2], chosen)

@@ -147,7 +147,9 @@ class Cpu:
                 self.r[ra] = rot & ((1 << (64 - mb)) - 1)
             elif op == 31:
                 xo = (w >> 1) & 0x3FF
-                if xo == 266:  # add
+                if xo == 19:  # mfcr
+                    self.r[rt] = sum(((lt << 3) | (gt << 2) | (eq << 1)) << (4 * (7 - i)) for i, (lt, gt, eq) in enumerate(self.cr))
+                elif xo == 266:  # add
                     self.r[rt] = (self.r[ra] + self.r[rb]) & M64
                 elif xo == 235:  # mullw
                     self.r[rt] = ((self.r[ra] & M32) * (self.r[rb] & M32)) & M32
@@ -175,8 +177,8 @@ class Cpu:
                     self.wr((self.ra0(ra) + self.r[rb]) & M64, 4, self.r[rt] & M32)
                 else:
                     raise NotImplementedError(f"{pc:#x}: xo {xo} in {w:08x}")
-            elif op == 11:  # cmpwi
-                a, b = _s32(self.r[ra]), _s16(w & 0xFFFF)
+            elif op == 11:  # cmpwi / cmpdi (L bit)
+                a, b = (_s64(self.r[ra]) if (w >> 21) & 1 else _s32(self.r[ra])), _s16(w & 0xFFFF)
                 self.cr[(w >> 23) & 7] = (int(a < b), int(a > b), int(a == b))
             elif op == 16:  # bc (only the two conditional forms used here)
                 bo, bi = rt, ra

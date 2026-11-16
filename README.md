@@ -7,7 +7,7 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 
 | Feature | State |
 |---|---|
-| Remove the black band at the top of the picture, keeping the 4:3 frame | Implemented, **crop amount is a first guess** (see below) |
+| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | **Confirmed on the console**: the screen is 100% filled |
 | One memory card per game | **Not implemented yet** (research done, see below) |
 | Safe installer (backup, hash checks, restore) | Done |
 
@@ -22,7 +22,7 @@ away until the game is closed. That has two consequences for this project:
   owner sees on the TV and by the files the emulator leaves on the disk;
 * a wrong patch only breaks PS2 ISO launching; the XMB keeps working and the original can be restored.
 
-## Feature 1: the black band at the top
+## Feature 1: the black bands at the top and the bottom
 
 The routine at `0x282978` draws the game frame as a textured rectangle. Decoded from its vertex stream: the four
 positions run from `(0,0)` to the output size (arguments `r5`, `r6`, which the caller reads from `0x115ee4`, the video
@@ -30,14 +30,15 @@ output size) and the four texture coordinates from `(0,0)` to the source size (`
 It is the only caller chain (`0x4a308` to `0x2859f8` to `0x282978`), so it is the picture of the game.
 Confirmed on the console: adding 100 to the destination height moved the picture.
 
-The band is inside the texture (the first rows of the GS output), so the fix is in the texture coordinates:
-`cave_crop.py` stores `CROP * height` in a free stack slot and gives the two top vertices that texture `y` instead of
-0 (three hooks, code in the 0x6c0 spare bytes at the end of the text page). The visible rows are stretched over the
-same frame, so the 4:3 pillar bars (the output viewport) are untouched.
+The bands are inside the texture (the first and the last rows of the GS output), so the fix is in the texture
+coordinates: `cave_crop.py` stores `CROP_TOP * height` and `(1 - CROP_BOTTOM) * height` in free stack slots and gives
+the two top vertices and the two bottom vertices those texture `y` values instead of `0` and `height` (five hooks,
+code in the 0x6c0 spare bytes at the end of the text page). The visible rows are stretched over the same frame, so the
+4:3 pillar bars (the output viewport) are untouched.
 
-`CROP = 16 / 448` is a first guess for the height of the band. It is tuned with the owner's report of what is left or
-what is cut, as was done for the PS1 emulator. Not yet known: whether every game and video mode (480i, 480p, PAL) has
-the same band.
+History on the console (Grandia III): cropping only the top made the band reappear at the bottom with the same size,
+so the texture has a blank band on both ends; cropping 16 of 448 rows on each end fills the screen completely, with
+nothing cut. Not yet known: whether every game and video mode (480i, 480p, PAL) has the same bands.
 
 ## Feature 2: one memory card per game (research, not implemented)
 

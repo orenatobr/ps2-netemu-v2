@@ -42,7 +42,8 @@ def test_the_height_hook_stores_the_crop_and_leaves_registers_alone(patched):
     cpu.f[10] = 448.0
     assert cpu.run(C.FRSP_VA, {C.FRSP_RESUME}) == C.FRSP_RESUME
     assert cpu.f[27] == 448.0  # the stock frsp still ran
-    assert cpu.rd(STACK + C.SLOT_VALUE, 4) == f32(448.0 * C.CROP)
+    assert cpu.rd(STACK + C.SLOT_VALUE, 4) == f32(448.0 * C.CROP_TOP)
+    assert cpu.rd(STACK + C.SLOT_BOTTOM, 4) == f32(448.0 - 448.0 * C.CROP_BOTTOM)
     assert cpu.r[12] == 0x1234_5678_9ABC and cpu.f[0] == 7.5
 
 
@@ -56,10 +57,19 @@ def test_each_top_vertex_gets_the_crop_as_its_texture_y(patched, hook, resume):
     assert cpu.r[12] == 0x1234_5678_9ABC
 
 
+@pytest.mark.parametrize("hook,resume", C.BOTTOM_VERTICES)
+def test_each_bottom_vertex_gets_the_cropped_height_as_its_texture_y(patched, hook, resume):
+    cpu = cpu_for(patched)
+    cpu.wr(STACK + C.SLOT_BOTTOM, 4, f32(432.0))
+    assert cpu.run(hook, {resume}) == resume
+    assert cpu.rd(STACK + 0xA4, 4) == f32(432.0)
+    assert cpu.r[12] == 0x1234_5678_9ABC
+
+
 def test_only_the_expected_words_changed(patched):
     stock = Path(os.environ["PS2_NETEMU_SELF"]).read_bytes()
     before = P.extend_text(S.unpack(stock))
     changed = {i & ~3 for i in range(len(before)) if before[i] != patched[i]}
-    cave = {P.va_to_off(patched, C.CAVE_VA if hasattr(C, "CAVE_VA") else P.CAVE_VA, 4) + k for k in range(0, 0x6C0, 4)}
-    outside = {P.va_to_off(patched, va, 4) for va in (C.FRSP_VA, *[h for h, _ in C.TOP_VERTICES])}
+    cave = {P.va_to_off(patched, P.CAVE_VA, 4) + k for k in range(0, 0x6C0, 4)}
+    outside = {P.va_to_off(patched, va, 4) for va in (C.FRSP_VA, *[h for h, _ in C.TOP_VERTICES + C.BOTTOM_VERTICES])}
     assert changed <= cave | outside and outside <= changed
