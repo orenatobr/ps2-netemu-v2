@@ -66,9 +66,14 @@ path in `/savedata/vmc/` (the shared card of ISO games) the hook
    `0x74e940`, made official by `extend_data`);
 3. points `r5` at it.
 
-Anything it does not understand leaves the shared card. **Nothing is ever stored into the code page**: every earlier build
-that wrote there (the card path in the cave, debug markers) took the console down, and the builds that only read it did not.
-`cave_card.py` (ISO reading, serial from `SYSTEM.CNF`) and `cave_serial.py` stay in the repository as the failed approach.
+Anything it does not understand leaves the shared card. The path is built in a scratch area in the data segment and nothing
+is stored into the code page. **This build is untested as shipped: it took the console down on the first hardware test.**
+The cause is not established. What is known: the builds that only redirect to a fixed path, or read `/tmp/cfg.bin` and then
+redirect to a fixed path, work; every build that computed the card path at run time crashed (stores into the code page,
+stores into an extended data segment, ISO reading). The extended data segment is itself a suspect, because the SELF
+container only loads the bytes of the original sections. A probe that picks one of two fixed cards by the format of
+`/tmp/cfg.bin` (`--probe-select`, no stores) is the next step. `cave_card.py` (ISO reading, serial from `SYSTEM.CNF`) and
+`cave_serial.py` stay in the repository as the failed approach.
 
 Findings on the console (Grandia III disc 2):
 
