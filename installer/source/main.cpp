@@ -4,11 +4,13 @@
 
 #include <string>
 
+#include "cards.h"
 #include "gfx.h"
 #include "fsx.h"
 #include "installer.h"
 #include "ps3.h"
 #include "ui.h"
+#include "ps2_card_head_bin.h"
 #include "ps2_netemu_v2_bin.h"
 
 #ifndef PATCHED_SHA256
@@ -21,6 +23,8 @@ namespace {
 constexpr const char* kStockSha = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a";
 constexpr const char* kTarget = "/dev_blind/ps2emu/ps2_netemu.self";
 constexpr const char* kBackup = "/dev_hdd0/ps2_netemu_stock.self";
+constexpr const char* kIsoDir = "/dev_hdd0/PS2ISO";
+constexpr const char* kCardDir = "/dev_hdd0/savedata/vmc";
 
 }  // namespace
 
@@ -48,6 +52,11 @@ int main() {
             const installer::Outcome o = in.a ? installer::install(cfg, payload) : installer::restore(cfg);
             note = ui::message(t, o);
             noteOk = o.ok;
+            if (in.a && fsx::isDir(kIsoDir)) {  // the patch names the card after the game: make the ones that are missing
+                const cards::Bytes head(ps2_card_head_bin, ps2_card_head_bin + ps2_card_head_bin_size);
+                const auto made = cards::ensureCards(kIsoDir, kCardDir, head);
+                if (!made.empty()) note += std::string(" ") + t.cardsMade + std::to_string(made.size());
+            }
             state = installer::detect(cfg);
         }
         if (in.b) break;

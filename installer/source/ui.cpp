@@ -13,7 +13,8 @@ const Text kEn = {"PS2 emulator patch v2.00",
                   "This file is not the build the patch was made for. Nothing was changed.",
                   "The package is damaged. Nothing was changed.", "No backup found. Nothing to restore.",
                   "Write failed. The original was kept; try again.", "Could not open the system files. This needs custom firmware.",
-                  "The patch is installed but there is no backup of the original, so Triangle cannot restore it. Copy the original to /dev_hdd0/ps2_netemu_stock.self."};
+                  "The patch is installed but there is no backup of the original, so Triangle cannot restore it. Copy the original to /dev_hdd0/ps2_netemu_stock.self.",
+                  "Memory cards created for your PS2 games: "};
 
 const Text kPt = {"Patch do emulador de PS2 v2.00",
                   "ps2_netemu.self: remove a faixa preta do topo da imagem (moldura 4:3 mantida).",
@@ -24,7 +25,8 @@ const Text kPt = {"Patch do emulador de PS2 v2.00",
                   "Este arquivo não é a versão para a qual o patch foi feito. Nada foi alterado.",
                   "O pacote está danificado. Nada foi alterado.", "Nenhum backup encontrado. Nada para restaurar.",
                   "Falha ao gravar. O original foi mantido; tente de novo.", "Não foi possível abrir os arquivos do sistema. Precisa de firmware customizado.",
-                  "O patch está instalado, mas não há backup do original, então Triângulo não consegue restaurar. Copie o original para /dev_hdd0/ps2_netemu_stock.self."};
+                  "O patch está instalado, mas não há backup do original, então Triângulo não consegue restaurar. Copie o original para /dev_hdd0/ps2_netemu_stock.self.",
+                  "Memory cards criados para seus jogos de PS2: "};
 
 std::string message(const Text& t, const installer::Outcome& o) {
     if (o.code == "installed") return t.installed;
