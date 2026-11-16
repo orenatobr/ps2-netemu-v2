@@ -151,6 +151,9 @@ class Cpu:
                     self.r[rt] = sum(((lt << 3) | (gt << 2) | (eq << 1)) << (4 * (7 - i)) for i, (lt, gt, eq) in enumerate(self.cr))
                 elif xo == 266:  # add
                     self.r[rt] = (self.r[ra] + self.r[rb]) & M64
+                elif xo == 491:  # divw (signed, truncating)
+                    a, b = _s32(self.r[ra]), _s32(self.r[rb])
+                    self.r[rt] = (int(abs(a) // abs(b)) * (1 if (a < 0) == (b < 0) else -1)) & M32 if b else 0
                 elif xo == 235:  # mullw
                     self.r[rt] = ((self.r[ra] & M32) * (self.r[rb] & M32)) & M32
                 elif xo == 534:  # lwbrx

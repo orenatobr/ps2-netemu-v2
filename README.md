@@ -85,6 +85,24 @@ between cards (verified byte for byte). The installer (`installer/source/cards.c
 Saves kept in the old shared `PS2.VM2` do not appear in a new per-game card. To start a game with its save, copy it into
 the card with `ps2card.copy_save`.
 
+## Experiments in the repository (not in the published package)
+
+The default build of `ps2_netemu_patch.py` is the one published in `v2.03`: crop plus the 32 slot card table (`cave_slots.py`).
+These are on top of it or beside it, each behind a flag:
+
+* `--wrap-card` (`cave_wrap.py`): no table and no slot limit. The hook wraps the emulator's card function, builds
+  `PS2_<title>.VM2` on its own stack (the function copies the path at the start and only uses the pointer during the call),
+  calls the original and returns. **It froze the console on the first test** (frozen, not rebooted, which points to a loop, a
+  deadlock or a stack overflow, not a write to protected memory). `--wrap-stage=fixed` (fixed path on a small stack, no file
+  reading) and `--wrap-stage=title` (no check that the card exists) are bisect steps for finding which part does it. The
+  installer sources in this repository (`cards.cpp`) already create the title named cards that this build needs; the published
+  package used the table logic of commit `90127a2`.
+* `--wide` (`cave_wide.py`): returns the video output width times 4/3 to the routine that draws the game picture. A test for
+  16:9 games (Dragon Quest VIII and others squeeze the picture into the 4:3 frame and expect the TV to stretch it): if the side
+  bars come from a 4:3 sized destination, the picture fills the screen. It affects every game; the per game switch needs a way
+  to know which games run in 16:9, which the emulator cannot see (it is a setting of the game), so a list by ISO name is the
+  likely answer.
+
 ## Install
 
 1. Copy `ps2_netemu_v2.00.pkg` to the console (USB drive or `/dev_hdd0/packages`) and install it from the XMB

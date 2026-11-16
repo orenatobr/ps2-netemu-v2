@@ -104,6 +104,8 @@ def assemble(base: int, lines: list[tuple]) -> list[int]:
             w = (31 << 26) | (_r(a[0]) << 21) | (_r(a[1]) << 16) | (_r(a[2]) << 11) | (151 << 1)
         elif m == "rlwinm":
             w = (21 << 26) | (_r(a[1]) << 21) | (_r(a[0]) << 16) | (a[2] << 11) | (a[3] << 6) | (a[4] << 1)
+        elif m == "divw":  # divw rt,ra,rb (signed 32 bit)
+            w = (31 << 26) | (_r(a[0]) << 21) | (_r(a[1]) << 16) | (_r(a[2]) << 11) | (491 << 1)
         elif m == "subf":
             w = (31 << 26) | (_r(a[0]) << 21) | (_r(a[1]) << 16) | (_r(a[2]) << 11) | (40 << 1)
         elif m in ("lfs", "lfd", "stfs", "stfd"):

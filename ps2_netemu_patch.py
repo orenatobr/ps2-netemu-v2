@@ -23,6 +23,7 @@ import cave_probe
 import cave_serial
 import cave_slots
 import cave_table
+import cave_wide
 import cave_wrap
 import selfio
 
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 STOCK_SHA256 = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a"
 CAVE_VA = 0x2FF940  # first free byte after the stock text segment; the page is mapped up to 0x300000
 CAVE_SIZE = 0x6C0
+WIDE_CAVE_VA = CAVE_VA + CAVE_SIZE - 0x20  # after the largest card cave (the slots build ends at +0x694)
 CARD_CAVE_VA = CAVE_VA + 0xA0  # the crop cave uses the first 0x98 bytes
 SERIAL_CAVE_VA = CAVE_VA + 0x200  # the serial capture (528 bytes); the card cave of the serial plan sits at CARD_CAVE_VA
 PATH_VA = CAVE_VA + 0x440  # 64 bytes: the card path of the disc, empty when none
@@ -208,6 +210,11 @@ def wrap_card_edits(stage: str = "full") -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
+def wide_edits() -> tuple[Edit, ...]:
+    """EXPERIMENT: widen the picture destination by 4/3 (cave_wide). Added on top of a build with --wide."""
+    return cave_edits(cave_wide.build(WIDE_CAVE_VA)[0])
+
+
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe); `select` picks the card by the cfg.bin format."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA, select)[0])
@@ -256,10 +263,12 @@ if __name__ == "__main__":
         chosen = crop_edits() + serial_card_edits()
     elif any(a.startswith("--wrap-stage=") for a in sys.argv):
         chosen = crop_edits() + wrap_card_edits(next(a.split("=")[1] for a in sys.argv if a.startswith("--wrap-stage=")))
-    elif "--slots-card" in sys.argv:
-        chosen = crop_edits() + slots_card_edits()
     elif "--file-card" in sys.argv:
         chosen = crop_edits() + file_card_edits()
-    else:
+    elif "--wrap-card" in sys.argv:
         chosen = crop_edits() + wrap_card_edits()
+    else:
+        chosen = crop_edits() + slots_card_edits()
+    if "--wide" in sys.argv:
+        chosen = chosen + wide_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)
