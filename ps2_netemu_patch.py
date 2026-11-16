@@ -21,6 +21,7 @@ import cave_cardname
 import cave_crop
 import cave_probe
 import cave_serial
+import cave_slots
 import cave_table
 import selfio
 
@@ -190,6 +191,14 @@ def table_card_edits(isos: list[str]) -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
+def slots_card_edits() -> tuple[Edit, ...]:
+    """Feature: card chosen through the table file written by the installer, fixed slot paths (cave_slots)."""
+    patches, used = cave_slots.build(CARD_CAVE_VA)
+    if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the card slots cave does not fit in the text page")
+    return cave_edits(patches)
+
+
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe); `select` picks the card by the cfg.bin format."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA, select)[0])
@@ -226,6 +235,8 @@ if __name__ == "__main__":
         chosen = crop_edits() + static_card_edits()
     elif "--iso-card" in sys.argv:
         chosen = crop_edits() + card_edits()
+    elif "--slots-card" in sys.argv:
+        chosen = crop_edits() + slots_card_edits()
     elif "--table-card" in sys.argv:
         chosen = crop_edits() + table_card_edits([a for a in sys.argv[3:] if not a.startswith("--")])
     elif "--probe-select" in sys.argv:
@@ -239,5 +250,5 @@ if __name__ == "__main__":
     else:
         chosen = crop_edits() + file_card_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch=chosen is not EXPERIMENT and not any(
-        a in sys.argv for a in ("--serial-card", "--static-card", "--iso-card", "--probe", "--probe-select", "--table-card", "--crop-only", "--debug-card"))
+        a in sys.argv for a in ("--serial-card", "--static-card", "--iso-card", "--probe", "--probe-select", "--table-card", "--slots-card", "--crop-only", "--debug-card"))
         and not any(a.startswith("--stop-after=") for a in sys.argv))
