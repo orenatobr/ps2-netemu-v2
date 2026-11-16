@@ -95,8 +95,8 @@ These are on top of it or beside it, each behind a flag:
   calls the original and returns. **It froze the console on the first test** (frozen, not rebooted, which points to a loop, a
   deadlock or a stack overflow, not a write to protected memory). `--wrap-stage=fixed` (fixed path on a small stack, no file
   reading) and `--wrap-stage=title` (no check that the card exists) are bisect steps for finding which part does it. The
-  installer sources in this repository (`cards.cpp`) already create the title named cards that this build needs; the published
-  package used the table logic of commit `90127a2`.
+  title named card logic that this build needs is kept in `installer/experimental/` (`cards_title.*`, not built); the
+  installer in `installer/source/` is the table logic of the published package, so a build from `main` reproduces `v2.03`.
 * `--wide` (`cave_wide.py`): returns the video output width times 4/3 to the routine that draws the game picture. A test for
   16:9 games (Dragon Quest VIII and others squeeze the picture into the 4:3 frame and expect the TV to stretch it): if the side
   bars come from a 4:3 sized destination, the picture fills the screen. It affects every game; the per game switch needs a way
