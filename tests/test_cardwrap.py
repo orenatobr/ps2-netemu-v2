@@ -107,7 +107,7 @@ def call(patched: bytes, files: Files, slot: int = 0, r4: int = 0, p: str | None
 @pytest.mark.parametrize("iso", ISOS)
 @pytest.mark.parametrize("typed", [True, False])
 def test_the_original_function_gets_the_game_card_on_the_stack(patched, iso, typed):
-    cpu, seen = call(patched, Files(cfg(iso, typed), all_cards=True))
+    _cpu, seen = call(patched, Files(cfg(iso, typed), all_cards=True))
     assert seen.entry["path"] == "/savedata/vmc/" + C.card_file(iso)
     assert STACK - C.FRAME <= seen.entry["r5"] < STACK  # inside the wrapper frame
     assert seen.entry["r1"] == STACK - C.FRAME
@@ -203,5 +203,5 @@ def test_stage_fixed_calls_the_original_with_a_fixed_path_on_a_small_stack(stage
 
 @pytest.mark.parametrize("stage", ["title", "fixed"])
 def test_staged_builds_leave_other_cards_alone(staged, stage):
-    cpu, seen = call(staged[stage], Files(cfg("/x/Game.iso")), slot=1)
+    _cpu, seen = call(staged[stage], Files(cfg("/x/Game.iso")), slot=1)
     assert seen.entry["r5"] == BUF and seen.entry["r1"] == STACK
