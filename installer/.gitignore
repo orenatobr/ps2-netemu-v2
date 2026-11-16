@@ -1,0 +1,9 @@
+build/
+*.elf
+*.self
+*.pkg
+*.map
+*.o
+*.d
+dist/
+payload/*.bin

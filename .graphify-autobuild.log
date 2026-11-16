@@ -1,0 +1,9 @@
+[graphify extract] scanning /Users/renato.pereira/Workspace/ps2-netemu-v2
+[graphify extract] --code-only: skipping 4 non-code file(s) (3 docs, 0 papers, 1 images) — no LLM extraction
+[graphify extract] found 22 code, 0 docs, 0 papers, 0 images
+[graphify extract] 8 file(s) not classified (no supported extension or shebang), skipped: .gitignore, .graphify-autobuild.log, COMMIT, LICENSE, Makefile, inter_bold.ttf (+2 more)
+[graphify extract] AST extraction on 22 code files...
+  warning: 2 file(s) had syntax errors and may be partially extracted: installer/third_party/stb/stb_image_write.h (first error at line 192, 69 symbol(s) extracted), installer/third_party/stb/stb_truetype.h (first error at line 503, 225 symbol(s) extracted)
+[graphify extract] wrote /Users/renato.pereira/Workspace/ps2-netemu-v2/graphify-out/graph.json: 547 nodes, 1407 edges, 28 communities
+[graphify extract] wrote /Users/renato.pereira/Workspace/ps2-netemu-v2/graphify-out/.graphify_analysis.json
+[graphify extract] next: run `graphify cluster-only /Users/renato.pereira/Workspace/ps2-netemu-v2` to generate GRAPH_REPORT.md and name communities

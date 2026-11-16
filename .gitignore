@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.self
+*.pkg
+*.elf
+dist/
+build/
+installer/build/
+installer/payload/*.bin
+installer/*.elf
+installer/*.map
