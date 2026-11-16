@@ -249,6 +249,4 @@ if __name__ == "__main__":
         chosen = crop_edits() + file_card_edits()
     else:
         chosen = crop_edits() + slots_card_edits()
-    main(sys.argv[1], sys.argv[2], chosen, scratch=chosen is not EXPERIMENT and not any(
-        a in sys.argv for a in ("--serial-card", "--static-card", "--iso-card", "--probe", "--probe-select", "--table-card", "--file-card", "--crop-only", "--debug-card"))
-        and not any(a.startswith("--stop-after=") for a in sys.argv))
+    main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)
