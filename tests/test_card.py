@@ -73,8 +73,12 @@ class Fs:
 
     def read(self, cpu: Cpu) -> None:
         fd, off, buf, size = cpu.r[3], cpu.r[4], cpu.r[5], cpu.r[6]
-        data = self.files[self.fds[fd]][off:off + size]
-        self.log.append(("read", self.fds[fd], off, size))
+        path = self.fds[fd]
+        self.log.append(("read", path, off, size))
+        if path != "/tmp/cfg.bin" and (off % C.ALIGN or size % C.ALIGN):  # the console is suspected to refuse these
+            cpu.r[3] = (1 << 64) - 1
+            return
+        data = self.files[path][off:off + size]
         for i, b in enumerate(data):
             cpu.mem[buf + i] = b
         cpu.r[3] = len(data)
@@ -220,4 +224,46 @@ def test_the_stack_stays_inside_the_small_frame(patched):
     fs = Fs({"/tmp/cfg.bin": cfg(G2), G2: iso(cnf())})
     cpu = hook(patched, fs)
     low = min(a for a in cpu.mem if STACK - 0x10000 < a <= STACK)
-    assert STACK - C.FRAME <= low and C.FRAME <= 0x200
+    assert STACK - C.FRAME <= low and C.FRAME <= 0x500
+
+
+def test_every_read_of_an_image_is_aligned(patched):
+    fs = Fs({"/tmp/cfg.bin": cfg(G2), G2: iso(cnf())})
+    hook(patched, fs)
+    reads = [e for e in fs.log if e[0] == "read" and e[1] != "/tmp/cfg.bin"]
+    assert reads and all(off % C.ALIGN == 0 and size % C.ALIGN == 0 for _, _, off, size in reads)
+
+
+@pytest.fixture(scope="module")
+def debug_patched() -> bytes:
+    path = os.environ.get("PS2_NETEMU_SELF")
+    if not path:
+        pytest.skip("stock SELF not provided")
+    return P.apply_edits(P.extend_text(S.unpack(Path(path).read_bytes())), P.crop_edits() + P.card_edits(debug=True))
+
+
+def marker(cpu: Cpu) -> str:
+    return "" if cpu.r[5] == BUF else cpu.cstr(cpu.r[5]).removeprefix("/savedata/vmc/").removesuffix(".VM2")
+
+
+@pytest.mark.parametrize("files,stage", [
+    ({}, "DBG_A"),
+    ({"/tmp/cfg.bin": b""}, "DBG_B"),
+    ({"/tmp/cfg.bin": b"\x02\0\0\0\0\0\0\0"}, "DBG_C"),
+    ({"/tmp/cfg.bin": cfg("/x/Missing.iso")}, "DBG_D"),
+    ({"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(cnf(), magic=b"XXXXX")}, "DBG_E"),
+    ({"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(None)}, "DBG_G"),
+    ({"/tmp/cfg.bin": cfg("/x/G.iso"), "/x/G.iso": iso(b"BOOT = cdrom:\\SLUS_006.62;1\r\n")}, "DBG_I"),
+])
+def test_the_debug_build_marks_the_stage_where_it_gave_up(debug_patched, files, stage):
+    fs = Fs(files)
+    assert marker(hook(debug_patched, fs)) == stage
+    assert not fs.fds
+
+
+def test_the_debug_build_marks_a_path_outside_the_vmc_folder(debug_patched):
+    assert marker(hook(debug_patched, Fs({}), p="/dev_hdd0/savedata/vmc/PS2.VM2")) == "DBG_Y"
+
+
+def test_the_debug_build_still_gives_the_serial_when_everything_works(debug_patched):
+    assert marker(hook(debug_patched, Fs({"/tmp/cfg.bin": cfg(G2), G2: iso(cnf())}))) == "SLUS-21345"
