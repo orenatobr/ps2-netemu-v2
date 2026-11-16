@@ -5,17 +5,17 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 
 ## Status
 
-**The published package (`latest`, `ps2_netemu_v2.00.pkg`) contains only the image fix.** The per-game memory card is not in it.
+**The published package (`latest`, `ps2_netemu_v2.00.pkg`) has both features, confirmed on the console (Grandia III disc 2).**
 
 | Feature | State |
 |---|---|
-| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | **In the published package. Confirmed on the console**: the screen is 100% filled |
-| One memory card per game, named after the ISO title | **Not published yet.** Fixed redirect confirmed on the console; the build that picks the card by ISO name (data-segment scratch, no store in the code page) is installed for the hardware test |
-| Safe installer (backup, hash checks, restore) | In the published package |
-| Installer creating the missing per-game cards from the ISOs | In the repository (host tests pass), not in the published package |
+| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | Confirmed: the screen is 100% filled |
+| One memory card per game | Confirmed: the game loaded the save and wrote to its own card (`PS2_C00.VM2`), the shared `PS2.VM2` stayed untouched |
+| Safe installer (backup, hash checks, restore) | In the package |
+| Installer creating the cards and the table from the ISOs | In the package (host tests pass; the table and the card of the tested game were put by hand over FTP) |
 
-Multi-disc games share one card through the `(Disc N)` rule on the ISO file name. Discs without that tag in the name get
-their own card.
+Limits: 32 games (the 33rd and later keep the shared `PS2.VM2`); an ISO file name longer than 126 bytes is left on the shared
+card; cards are named by slot (`PS2_C00.VM2`), the file `PS2_CARDS.TBL` says which game each one is.
 
 ## What it is
 
@@ -48,44 +48,39 @@ nothing cut. Not yet known: whether every game and video mode (480i, 480p, PAL) 
 
 ## Feature 2: one memory card per game
 
-The card is named after the **game title in the ISO file name**, with the `(Disc N)` tag removed, so every disc of a game shares
-one card: `Grandia III (USA) (Disc 2).iso` and `(Disc 1).iso` both use `/savedata/vmc/PS2_Grandia_III__USA_.VM2`. Characters
-other than letters, digits, `_` and `-` become `_`.
+The card of a game is chosen by the **ISO file name**. All the discs of a game (names that differ only by a `(Disc N)` or
+`[Disc N]` tag) share one card, so the save of disc 1 is there on disc 2 (Grandia III has a different disc serial on each
+disc, which is why a serial based card, as in the PS1 patch, would split it).
 
-Why the file name and not the disc serial (what the PS1 patch does): reading `SYSTEM.CNF` from inside the emulator means
-opening and parsing the ISO from the hook, and every build that did it took the console down. Grandia III also has a
-different serial on each disc (`SLUS-21334` and `SLUS-21345`), so a serial would split the game across two cards, and the
-`(Disc N)` rule is what keeps the save reachable from disc 2.
+How it works (`cave_slots.py`): the image carries 32 fixed card paths, `/savedata/vmc/PS2_C00.VM2` to `PS2_C31.VM2`, and
+the hook only computes `slots + slot * 26`. Which slot a file name uses is in `/savedata/vmc/PS2_CARDS.TBL`, written by the
+installer: 128 byte records (slot byte, ISO file name, NUL padding) ended by an empty record. `0x12a528(slot, 0, path, ...)`
+receives the card path in `r5`; for memory card 1 and a path in `/savedata/vmc/` the hook
 
-How it works (`cave_cardfile.py`): `0x12a528(slot, 0, path, ...)` receives the card path in `r5`. For memory card 1 and a
-path in `/savedata/vmc/` (the shared card of ISO games) the hook
+1. reads `/tmp/cfg.bin`, which Cobra fills with the mounted ISO (a type byte, then the path), with the emulator's own file
+   calls (`0x1ecc5c` open, `0x1ed5cc` read at an offset, `0x1ecb10` close, the ones the function itself uses on the card);
+2. takes the last path component and walks the table file record by record comparing names;
+3. on a match points `r5` at the slot path. Anything else (no table, no match, unreadable file) leaves the shared card.
 
-1. reads `/tmp/cfg.bin`, which Cobra fills with the path of the mounted ISO, with the emulator's own file calls
-   (`0x1ecc5c` open, `0x1ed5cc` read at an offset, `0x1ecb10` close, the ones it uses for `ps2bootparam.dat`);
-2. builds the card path from the file name in a writable scratch area (the unused tail of the data segment page,
-   `0x74e940`, made official by `extend_data`);
-3. points `r5` at it.
+Nothing is ever stored outside the stack frame. This shape is the result of the console tests, in order:
 
-Anything it does not understand leaves the shared card. The path is built in a scratch area in the data segment and nothing
-is stored into the code page. **This build is untested as shipped: it took the console down on the first hardware test.**
-The cause is not established. What is known: the builds that only redirect to a fixed path, or read `/tmp/cfg.bin` and then
-redirect to a fixed path, work; every build that computed the card path at run time crashed (stores into the code page,
-stores into an extended data segment, ISO reading). The extended data segment is itself a suspect, because the SELF
-container only loads the bytes of the original sections. A probe that picks one of two fixed cards by the format of
-`/tmp/cfg.bin` (`--probe-select`, no stores) is the next step. `cave_card.py` (ISO reading, serial from `SYSTEM.CNF`) and
-`cave_serial.py` stay in the repository as the failed approach.
+* a fixed redirect of the card path works;
+* a read of `/tmp/cfg.bin` followed by a fixed redirect works, and `cfg.bin` is a type byte plus the ISO path;
+* choosing between fixed paths by what was read works (`--probe-select`, then a name table inside the image, `--table-card`);
+* every build that **built the card path at run time** took the console down (path in the code page, path in a data
+  segment extended past its original size, ISO reading with the serial from `SYSTEM.CNF`). The exact reason is not
+  established; the path has to stay valid for the whole emulator function (`r28`), so a fixed string is the safe answer.
+  Those experiments stay in the repository as `cave_cardfile.py` (`--file-card`), `cave_card.py` and `cave_serial.py`.
 
-Findings on the console (Grandia III disc 2):
+Other findings (Grandia III disc 2):
 
-* Redirecting `r5` to a fixed card works: the game loaded the save and wrote to the new card, `PS2.VM2` untouched.
-* The emulator does **not** create a missing card, so the cards must exist. The installer creates them (below).
-* Calling the emulator's file functions from the hook is safe when the frame and the reads are small.
+* The emulator does **not** create a missing card, so the cards must exist. The installer creates them.
 * The card file date does not move when the emulator writes: compare hashes, not dates.
 
 `ps2card.py` builds a blank formatted card (`.VM2`: 8 MB of data plus 16 ECC bytes per page); the ECC rule was fitted on
 all 1265 written pages of a real card and the blank card reproduces its superblock page exactly. `copy_save` copies a save
-between cards (verified byte for byte). The installer (`installer/source/cards.cpp`) scans `/dev_hdd0/PS2ISO`, finds the
-serial of each image with the same disc 1 rule and creates the cards that do not exist (it never touches an existing one).
+between cards (verified byte for byte). The installer (`installer/source/cards.cpp`) scans `/dev_hdd0/PS2ISO`, updates the
+`PS2_CARDS.TBL` (keeping the slots already given, so a game never changes card when others are added) and creates the cards that do not exist (it never touches an existing one).
 
 Saves kept in the old shared `PS2.VM2` do not appear in a new per-game card. To start a game with its save, copy it into
 the card with `ps2card.copy_save`.
