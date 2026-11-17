@@ -35,12 +35,17 @@ def missing_cards(isos: Iterable[str], existing: Iterable[str]) -> dict[str, str
     return out
 
 
+def _raw(path: str) -> str:
+    """File name of an FTP listing entry with its original bytes (undecodable ones as surrogates, like card_name expects)."""
+    return path.rsplit("/", 1)[-1].encode("latin-1").decode("utf-8", "surrogateescape")
+
+
 def run(host: str) -> list[str]:
     """Create the missing cards on the console and return their names."""
     made: list[str] = []
-    with ftplib.FTP(host, timeout=60) as ftp:
+    with ftplib.FTP(host, timeout=60, encoding="latin-1") as ftp:  # latin-1 keeps every byte of a name, even non UTF-8 ones
         ftp.login("root", "")
-        isos = [n.rsplit("/", 1)[-1] for n in ftp.nlst(ISO_DIR)]
+        isos = [_raw(n) for n in ftp.nlst(ISO_DIR)]
         existing = [n.rsplit("/", 1)[-1] for n in ftp.nlst(VMC_DIR)]
         for card, iso in missing_cards(isos, existing).items():
             logger.info("creating %s for %s", card, iso)

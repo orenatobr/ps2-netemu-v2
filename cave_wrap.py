@@ -39,7 +39,7 @@ def _keep(c: int) -> bool:
 
 def card_name(iso_path: str) -> str:
     """The card name (no PS2_ prefix, no extension) for an ISO path, or '' (the reference the cave is tested against)."""
-    base = iso_path.encode().rsplit(b"/", 1)[-1]
+    base = iso_path.encode("utf-8", "surrogateescape").rsplit(b"/", 1)[-1]
     dot = base.rfind(b".")
     if dot > 0 and len(base) - dot <= 5:
         base = base[:dot]
