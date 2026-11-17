@@ -5,18 +5,22 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 
 ## Status
 
-The package has both features, confirmed on the console (Grandia III disc 2).
+Release `v2.05` (the package is always `ps2_netemu_v2.00.pkg`). Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
 
 | Feature | State |
 |---|---|
-| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | Confirmed: the screen is 100% filled |
-| One memory card per game, named after the ISO title, any number of games | Confirmed: the game loaded its save and wrote to its own card, `PS2.VM2` stayed untouched |
-| Memory card 1 always present | Confirmed: when the launcher leaves the path buffer of card 1 empty (which it did after a forced reboot, and even the original Sony image then reports "no memory card") the shared `PS2.VM2` is used |
+| Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | Confirmed on the TV: the screen is 100% filled |
+| One memory card per game, named after the ISO title, no limit on the number of games | Confirmed: the game loaded its save and wrote to its own card, `PS2.VM2` stayed untouched |
+| Memory card 1 always present | Confirmed: when the launcher leaves the path buffer of card 1 empty the shared `PS2.VM2` is used |
+| Installer creating the missing cards from the ISOs | The Dragon Quest VIII card appeared on the console right after the package ran (not made by `tools/make_cards.py`); a run of the app with a brand new ISO is the check still to do |
+| Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
+| Menu: Other settings > Screen mode shows `4:3` instead of `Normal` in every language | Installed and checked by hash; on-screen text not yet seen |
+| **16:9 option in that menu (full screen stretch)** | **Not implemented.** The string "Full screen" exists in the emulator (id 57) but the code of the menu item and the point that sets the output aspect are not found yet; it needs experiments on the console |
 | Safe installer (backup, hash checks, restore) | In the package |
-| Installer creating the missing cards from the ISOs | In the package (host tests pass; not yet run on a console, the card of the tested game was copied by hand over FTP) |
 
 Limits: the emulator cannot create a card file, so a game without its card uses the shared `PS2.VM2`. The cards are made by the
-app: after adding ISOs, open **PS2 Emulator Patch** and press Cross again. New cards start empty.
+app: after adding ISOs, open **PS2 Emulator Patch** and press Cross again (or run `tools/make_cards.py` from the Mac). New cards start
+empty. The card name is cut at 52 bytes, so two different games that share their first 52 bytes would share a card.
 
 ## What it is
 
@@ -103,8 +107,7 @@ Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufc
 * `--slots-card`, `--table-card`, `--file-card`, `--wrap-card`, `--defname`: the earlier designs above.
 * `--wide` (`cave_wide.py`): returns the video output width times 4/3. Meant for 16:9 games that squeeze the picture into the 4:3 frame
   (Dragon Quest VIII); on the console it gave a **black screen** (the getter is used for more than the picture rectangle), so it is
-  not a way forward as it is. The 16:9 switch is still open: the emulator cannot see the game's own 16:9 option, so a list by ISO
-  name is the likely answer.
+  not a way forward as it is. The 16:9 menu option is the open item (see Status).
 
 ## Creating the cards without opening the app
 
