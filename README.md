@@ -5,17 +5,18 @@ A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer p
 
 ## Status
 
-**The published package (`latest`, `ps2_netemu_v2.00.pkg`) has both features, confirmed on the console (Grandia III disc 2).**
+The package has both features, confirmed on the console (Grandia III disc 2).
 
 | Feature | State |
 |---|---|
 | Fill the 4:3 frame: crop the black bands at the top and bottom of the picture | Confirmed: the screen is 100% filled |
-| One memory card per game | Confirmed: the game loaded the save and wrote to its own card (`PS2_C00.VM2`), the shared `PS2.VM2` stayed untouched |
+| One memory card per game, named after the ISO title, any number of games | Confirmed: the game loaded its save and wrote to its own card, `PS2.VM2` stayed untouched |
+| Memory card 1 always present | Confirmed: when the launcher leaves the path buffer of card 1 empty (which it did after a forced reboot, and even the original Sony image then reports "no memory card") the shared `PS2.VM2` is used |
 | Safe installer (backup, hash checks, restore) | In the package |
-| Installer creating the cards and the table from the ISOs | In the package (host tests pass; the table and the card of the tested game were put by hand over FTP) |
+| Installer creating the missing cards from the ISOs | In the package (host tests pass; not yet run on a console, the card of the tested game was copied by hand over FTP) |
 
-Limits: the cards and the table are made by the app, not when a game starts: after adding ISOs, open the app and press Cross again (a game without a card uses the shared `PS2.VM2`). 32 games (the 33rd and later keep the shared `PS2.VM2`); an ISO file name longer than 126 bytes is left on the shared
-card; cards are named by slot (`PS2_C00.VM2`), the file `PS2_CARDS.TBL` says which game each one is.
+Limits: the emulator cannot create a card file, so a game without its card uses the shared `PS2.VM2`. The cards are made by the
+app: after adding ISOs, open **PS2 Emulator Patch** and press Cross again. New cards start empty.
 
 ## What it is
 
@@ -48,34 +49,43 @@ nothing cut. Not yet known: whether every game and video mode (480i, 480p, PAL) 
 
 ## Feature 2: one memory card per game
 
-The card of a game is chosen by the **ISO file name**. All the discs of a game (names that differ only by a `(Disc N)` or
-`[Disc N]` tag) share one card, so the save of disc 1 is there on disc 2 (Grandia III has a different disc serial on each
-disc, which is why a serial based card, as in the PS1 patch, would split it).
+The card of a game is named after the **ISO file name**: `PS2_<title>.VM2`, with no folder, no short extension and no
+`(Disc N)` / `[Disc N]` tag (nor the space before it), cut at 52 bytes, and every byte that is not a letter, a digit, `_` or `-` turned into
+`_`. All the discs of a game therefore share one card (Grandia III has a different serial on each disc, so a serial based card
+would split the game), there is no limit on the number of games, and `Grandia III (USA) (Disc 2).iso` uses
+`PS2_Grandia_III__USA_.VM2`.
 
-How it works (`cave_slots.py`): the image carries 32 fixed card paths, `/savedata/vmc/PS2_C00.VM2` to `PS2_C31.VM2`, and
-the hook only computes `slots + slot * 26`. Which slot a file name uses is in `/savedata/vmc/PS2_CARDS.TBL`, written by the
-installer: 128 byte records (slot byte, ISO file name, NUL padding) ended by an empty record. `0x12a528(slot, 0, path, ...)`
-receives the card path in `r5`; for memory card 1 and a path in `/savedata/vmc/` the hook
+### How the emulator picks the card (found by reading the image)
 
-1. reads `/tmp/cfg.bin`, which Cobra fills with the mounted ISO (a type byte, then the path), with the emulator's own file
-   calls (`0x1ecc5c` open, `0x1ed5cc` read at an offset, `0x1ecb10` close, the ones the function itself uses on the card);
-2. takes the last path component and walks the table file record by record comparing names;
-3. on a match points `r5` at the slot path. Anything else (no table, no match, unreadable file) leaves the shared card.
+At game start a routine (`0x12c17c...`) opens the card of slot 0 only if the path buffer at `object + 0x22e0` (256 bytes, the
+emulator's own memory) is not empty. The launcher fills that buffer through `0x12abc4(slot, name)`, which builds
+`snprintf(buf, 256, "%s%s.VM2", "/savedata/vmc/", name)` and calls `0x12a528`. The emulator never creates a card file (its file open is
+a request to the host with only a channel and a path).
 
-Nothing is ever stored outside the stack frame. This shape is the result of the console tests, in order:
+### What the hook does (`cave_bufcard.py`, on the check at `0x12c988`)
 
-* a fixed redirect of the card path works;
-* a read of `/tmp/cfg.bin` followed by a fixed redirect works, and `cfg.bin` is a type byte plus the ISO path;
-* choosing between fixed paths by what was read works (`--probe-select`, then a name table inside the image, `--table-card`);
-* every build that **built the card path at run time** took the console down (path in the code page, path in a data
-  segment extended past its original size, ISO reading with the serial from `SYSTEM.CNF`). The exact reason is not
-  established; the path has to stay valid for the whole emulator function (`r28`), so a fixed string is the safe answer.
-  Those experiments stay in the repository as `cave_cardfile.py` (`--file-card`), `cave_card.py` and `cave_serial.py`.
+1. Does nothing when a marker byte (`buffer + 0xFF`) says it already ran, or when the buffer holds a path outside `/savedata/vmc/`
+   (the PS2 Classics layout).
+2. Reads `/tmp/cfg.bin` (Cobra: a type byte, then the path of the mounted ISO) with the emulator's own file calls
+   (`0x1ecc5c` open, `0x1ed5cc` read, `0x1ecb10` close), builds the card path on its own stack frame, checks that the card exists
+   and copies the path into the buffer.
+3. When anything fails, an empty buffer gets `/savedata/vmc/PS2.VM2` and a filled one is left as the launcher wrote it.
 
-Other findings (Grandia III disc 2):
+Nothing is stored outside the stack frame and the emulator's own path buffer.
 
-* The emulator does **not** create a missing card, so the cards must exist. The installer creates them.
+### What was tried before, in order (kept as flags, not shipped)
+
+* a fixed redirect of the card path, and a read of `cfg.bin` followed by a fixed redirect, worked;
+* a name table inside the image (`--table-card`), then 32 fixed slot paths with a table file (`--slots-card`, published in `v2.03`),
+  worked while the launcher filled the buffer;
+* every build that **built the path at run time outside the emulator's own memory** took the console down (the code page, a data
+  segment extended past its stored size) and a wrapper that called the original function from its own frame froze it (`--wrap-card`);
+* a hook on `0x12a528` or on the name argument never mattered on the day the buffer came empty, because that function is not reached.
+
+Other findings:
+
 * The card file date does not move when the emulator writes: compare hashes, not dates.
+* `ps2bootparam.dat` is the launcher's network configuration (it carries the Wi-Fi data of the console); it has no card information.
 
 `ps2card.py` builds a blank formatted card (`.VM2`: 8 MB of data plus 16 ECC bytes per page); the ECC rule was fitted on
 all 1265 written pages of a real card and the blank card reproduces its superblock page exactly. `copy_save` copies a save
@@ -87,21 +97,14 @@ the card with `ps2card.copy_save`.
 
 ## Experiments in the repository (not in the published package)
 
-The default build of `ps2_netemu_patch.py` is the one published in `v2.03`: crop plus the 32 slot card table (`cave_slots.py`).
-These are on top of it or beside it, each behind a flag:
+Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufcard.py`.
 
-* `--wrap-card` (`cave_wrap.py`): no table and no slot limit. The hook wraps the emulator's card function, builds
-  `PS2_<title>.VM2` on its own stack (the function copies the path at the start and only uses the pointer during the call),
-  calls the original and returns. **It froze the console on the first test** (frozen, not rebooted, which points to a loop, a
-  deadlock or a stack overflow, not a write to protected memory). `--wrap-stage=fixed` (fixed path on a small stack, no file
-  reading) and `--wrap-stage=title` (no check that the card exists) are bisect steps for finding which part does it. The
-  title named card logic that this build needs is kept in `installer/experimental/` (`cards_title.*`, not built); the
-  installer in `installer/source/` is the table logic of the published package, so a build from `main` reproduces `v2.03`.
-* `--wide` (`cave_wide.py`): returns the video output width times 4/3 to the routine that draws the game picture. A test for
-  16:9 games (Dragon Quest VIII and others squeeze the picture into the 4:3 frame and expect the TV to stretch it): if the side
-  bars come from a 4:3 sized destination, the picture fills the screen. It affects every game; the per game switch needs a way
-  to know which games run in 16:9, which the emulator cannot see (it is a setting of the game), so a list by ISO name is the
-  likely answer.
+* `--bufpath` (`cave_bufpath.py`): only fills an empty slot 1 buffer with `PS2.VM2` (the smallest fix of the "no card" problem).
+* `--slots-card`, `--table-card`, `--file-card`, `--wrap-card`, `--defname`: the earlier designs above.
+* `--wide` (`cave_wide.py`): returns the video output width times 4/3. Meant for 16:9 games that squeeze the picture into the 4:3 frame
+  (Dragon Quest VIII); on the console it gave a **black screen** (the getter is used for more than the picture rectangle), so it is
+  not a way forward as it is. The 16:9 switch is still open: the emulator cannot see the game's own 16:9 option, so a list by ISO
+  name is the likely answer.
 
 ## Install
 

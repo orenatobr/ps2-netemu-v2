@@ -295,7 +295,7 @@ if __name__ == "__main__":
     elif "--wrap-card" in sys.argv:
         chosen = crop_edits() + wrap_card_edits()
     else:
-        chosen = crop_edits() + slots_card_edits()
+        chosen = crop_edits() + bufcard_edits()
     if "--wide" in sys.argv:
         chosen = chosen + wide_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)
