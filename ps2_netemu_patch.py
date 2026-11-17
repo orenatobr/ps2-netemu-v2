@@ -15,10 +15,12 @@ import struct
 import sys
 from dataclasses import dataclass
 
+import cave_bufpath
 import cave_card
 import cave_cardfile
 import cave_cardname
 import cave_crop
+import cave_defname
 import cave_probe
 import cave_serial
 import cave_slots
@@ -165,11 +167,11 @@ def serial_card_edits() -> tuple[Edit, ...]:
     return cave_edits(serial + name)
 
 
-def static_card_edits(name: bytes = b"PS2_SLUS-21345") -> tuple[Edit, ...]:
+def static_card_edits(name: bytes = b"PS2_SLUS-21345", any_path: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: memory card 1 always goes to /savedata/vmc/<name>.VM2, with no serial logic at all (cave_cardname with the
     path written in the cave). Tells whether a card with that name is safe, apart from the serial capture."""
     path = b"/savedata/vmc/" + name + b".VM2"
-    patches, used = cave_cardname.build(CARD_CAVE_VA, PATH_VA)
+    patches, used = cave_cardname.build(CARD_CAVE_VA, PATH_VA, any_path)
     blob = path.ljust(64, b"\0")
     data = [(PATH_VA + i, 0, int.from_bytes(blob[i:i + 4], "big"), "fixed card path") for i in range(0, 64, 4)]
     if CARD_CAVE_VA + used > SERIAL_CAVE_VA:
@@ -213,6 +215,16 @@ def wrap_card_edits(stage: str = "full") -> tuple[Edit, ...]:
 def wide_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: widen the picture destination by 4/3 (cave_wide). Added on top of a build with --wide."""
     return cave_edits(cave_wide.build(WIDE_CAVE_VA)[0])
+
+
+def defname_edits() -> tuple[Edit, ...]:
+    """EXPERIMENT: a NULL card name for slot 0 becomes "PS2" (cave_defname), so the game always gets a card in slot 1."""
+    return cave_edits(cave_defname.build(CARD_CAVE_VA)[0])
+
+
+def bufpath_edits() -> tuple[Edit, ...]:
+    """EXPERIMENT: an empty path buffer of memory card 1 gets /savedata/vmc/PS2.VM2 (cave_bufpath)."""
+    return cave_edits(cave_bufpath.build(CARD_CAVE_VA)[0])
 
 
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
@@ -265,6 +277,10 @@ if __name__ == "__main__":
         chosen = crop_edits() + wrap_card_edits(next(a.split("=")[1] for a in sys.argv if a.startswith("--wrap-stage=")))
     elif "--file-card" in sys.argv:
         chosen = crop_edits() + file_card_edits()
+    elif "--bufpath" in sys.argv:
+        chosen = crop_edits() + bufpath_edits()
+    elif "--defname" in sys.argv:
+        chosen = crop_edits() + defname_edits()
     elif "--wrap-card" in sys.argv:
         chosen = crop_edits() + wrap_card_edits()
     else:

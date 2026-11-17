@@ -16,13 +16,17 @@ RESUME = 0x12A52C
 PREFIX = b"/savedata/vmc/"
 
 
-def build(cave_va: int, path_va: int) -> tuple[list[tuple[int, int, int, str]], int]:
-    """Return the (va, old, new, what) patches and the bytes used from `cave_va`."""
+def build(cave_va: int, path_va: int, any_path: bool = False) -> tuple[list[tuple[int, int, int, str]], int]:
+    """Return the (va, old, new, what) patches and the bytes used from `cave_va`.
+
+    `any_path` (an experiment) drops the check of the `/savedata/vmc/` prefix, to find out whether the launcher gives another
+    path style (PS2 Classics: `.../USRDIR/SAVEDATA/SCEVMC0.VME`).
+    """
     lines: list[tuple] = [
         ("mfcr", "r12"),  # the displaced stock instruction
         ("cmpwi", "r3", 0), ("bne", "done"), ("cmpdi", "r4", 0), ("bne", "done"), ("cmpdi", "r5", 0), ("beq", "done"),
     ]
-    for i, c in enumerate(PREFIX):
+    for i, c in enumerate(b"" if any_path else PREFIX):
         lines += [("lbz", "r0", i, "r5"), ("cmpwi", "r0", c), ("bne", "done")]
     lines += [
         ("lis", "r11", path_va >> 16), ("ori", "r11", "r11", path_va & 0xFFFF),
