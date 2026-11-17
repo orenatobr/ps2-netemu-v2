@@ -236,6 +236,24 @@ def bufcard_edits() -> tuple[Edit, ...]:
     return cave_edits(patches)
 
 
+# The value label of the emulator's "Screen Mode" item ("Normal") in each language table; the item has no other value. Same length
+# replacement (padded with spaces) so the table of NUL separated strings keeps its layout.
+SCREEN_MODE_LABELS = (
+    (0x713E82, b"Normal"), (0x714690, b"Normal"), (0x714FED, b"Normal"), (0x7158A0, b"Normal"), (0x716227, b"Normale"),
+    (0x717476, b"Normal"), (0x71ABC7, b"Normal"), (0x71B455, b"Normal"), (0x71BCA8, b"Normal"), (0x71C4AA, b"Normalne"),
+    (0x71CD93, b"Normal"), (0x71D672, b"Normal"), (0x71DE82, b"Normal"),
+)
+SCREEN_MODE_NAME = b"4:3"
+
+
+def screen_mode_label_edits() -> tuple[Edit, ...]:
+    """Rename the only screen mode, "Normal", to "4:3" in every language table (what the picture crop makes it)."""
+    return tuple(
+        Edit(va, old, SCREEN_MODE_NAME.ljust(len(old), b" "), "screen mode label")
+        for va, old in SCREEN_MODE_LABELS
+    )
+
+
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe); `select` picks the card by the cfg.bin format."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA, select)[0])
@@ -298,4 +316,6 @@ if __name__ == "__main__":
         chosen = crop_edits() + bufcard_edits()
     if "--wide" in sys.argv:
         chosen = chosen + wide_edits()
+    if not any(a in sys.argv for a in ("--no-labels", "--probe", "--probe-select", "--crop-only")):
+        chosen = chosen + screen_mode_label_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)
