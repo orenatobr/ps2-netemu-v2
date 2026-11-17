@@ -15,6 +15,7 @@ import struct
 import sys
 from dataclasses import dataclass
 
+import cave_bufcard
 import cave_bufpath
 import cave_card
 import cave_cardfile
@@ -227,6 +228,14 @@ def bufpath_edits() -> tuple[Edit, ...]:
     return cave_edits(cave_bufpath.build(CARD_CAVE_VA)[0])
 
 
+def bufcard_edits() -> tuple[Edit, ...]:
+    """Feature candidate: the game card path is written into the path buffer of memory card 1 (cave_bufcard)."""
+    patches, used = cave_bufcard.build(CARD_CAVE_VA)
+    if CARD_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the buffer card cave does not fit in the text page")
+    return cave_edits(patches)
+
+
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe); `select` picks the card by the cfg.bin format."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA, select)[0])
@@ -277,6 +286,8 @@ if __name__ == "__main__":
         chosen = crop_edits() + wrap_card_edits(next(a.split("=")[1] for a in sys.argv if a.startswith("--wrap-stage=")))
     elif "--file-card" in sys.argv:
         chosen = crop_edits() + file_card_edits()
+    elif "--bufcard" in sys.argv:
+        chosen = crop_edits() + bufcard_edits()
     elif "--bufpath" in sys.argv:
         chosen = crop_edits() + bufpath_edits()
     elif "--defname" in sys.argv:
