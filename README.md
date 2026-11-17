@@ -106,6 +106,13 @@ Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufc
   not a way forward as it is. The 16:9 switch is still open: the emulator cannot see the game's own 16:9 option, so a list by ISO
   name is the likely answer.
 
+## Creating the cards without opening the app
+
+The emulator cannot create a card file and a PS3 app cannot run in the background, so the creation can also be done from the
+Mac: `python tools/make_cards.py 192.168.1.85` lists `/dev_hdd0/PS2ISO` over FTP, works out the card name of every ISO with the
+rule of the patch and uploads a blank card for each one that does not exist (existing cards are never touched). It can run on a
+schedule (launchd or cron) while the Mac and the console are on the same network.
+
 ## Install
 
 1. Copy `ps2_netemu_v2.00.pkg` to the console (USB drive or `/dev_hdd0/packages`) and install it from the XMB
