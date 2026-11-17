@@ -35,7 +35,11 @@ int main() {
     const ui::Text& t = ps3::portuguese() ? ui::kPt : ui::kEn;
     gfx::Canvas canvas(width, height, ps3::fontBytes(false), ps3::fontBytes(true));
 
-    const bool mounted = sysLv2FsMount("CELL_FS_IOS:BUILTIN_FLSH1", "CELL_FS_FAT", "/dev_blind", 0) == 0;
+    // webMAN (or an earlier run) may already have /dev_blind mounted: the mount then fails, but the files are there. Use them as
+    // they are and leave the mount alone at the end, since it is not ours.
+    const bool alreadyMounted = fsx::exists(kTarget);
+    const bool ownMount = !alreadyMounted && sysLv2FsMount("CELL_FS_IOS:BUILTIN_FLSH1", "CELL_FS_FAT", "/dev_blind", 0) == 0;
+    const bool mounted = alreadyMounted || ownMount;
     const installer::Config cfg{kTarget, kBackup, kStockSha, PATCHED_SHA256};
     const installer::Bytes payload(ps2_netemu_v2_bin, ps2_netemu_v2_bin + ps2_netemu_v2_bin_size);
 
@@ -64,7 +68,7 @@ int main() {
         ps3::videoPresent(canvas.pixels());
         ps3::sleepMs(33);
     }
-    if (mounted) sysLv2FsUnmount("/dev_blind");
+    if (ownMount) sysLv2FsUnmount("/dev_blind");
     ps3::videoShutdown();
     return 0;
 }
