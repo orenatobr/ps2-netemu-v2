@@ -316,6 +316,6 @@ if __name__ == "__main__":
         chosen = crop_edits() + bufcard_edits()
     if "--wide" in sys.argv:
         chosen = chosen + wide_edits()
-    if not any(a in sys.argv for a in ("--no-labels", "--probe", "--probe-select", "--crop-only")):
+    if "--labels" in sys.argv:  # opt-in: the menu value keeps its stock name "Normal" (the item is Off / Normal / Full Screen)
         chosen = chosen + screen_mode_label_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)

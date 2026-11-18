@@ -6,7 +6,7 @@ what changed in each release).
 
 ## Status
 
-Release `v2.06`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
+Release `v2.07`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
 
 | Feature | State |
 |---|---|
@@ -15,7 +15,7 @@ Release `v2.06`. Checked on the console with the Grandia III and Dragon Quest VI
 | Memory card 1 always present | Confirmed: when the launcher leaves the path buffer of card 1 empty the shared `PS2.VM2` is used |
 | Installer creating the missing cards from the ISOs | The Dragon Quest VIII card appeared on the console right after the package ran (not made by `tools/make_cards.py`); a run of the app with a brand new ISO is the check still to do |
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
-| Menu: Other settings > Screen mode shows `4:3` instead of `Normal` in every language | Installed and checked by hash; on-screen text not yet seen |
+| Menu value "Normal" keeps its stock name | In `v2.07` (v2.05 and v2.06 renamed it to `4:3`; `--labels` still does) |
 | **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. |
 | Safe installer (backup, hash checks, restore) | In the package |
 | Progress bar on Install, Restore and the card creation; button icons; English only; version from `VERSION` | In `v2.06`. Host tests cover the progress reports (bar never goes back, ends at 100%); not yet seen on the console |
@@ -27,16 +27,18 @@ empty. The card name is cut at 52 bytes, so two different games that share their
 
 ## 16:9: what was found
 
-The menu item "Screen mode" has one value in this emulator, "Normal" (shown as "4:3" by the patch). What is known, all by static
-analysis (nothing here could be measured on the console, because the console restarts into the emulator when a game starts):
+The menu item "Screen mode" has three values on the console: Off, Normal and Full Screen (seen on the TV; an earlier reading of this image
+that said "Normal is the only value" was wrong). What is known, all by static analysis (the console restarts into the emulator when a
+game starts, so nothing could be measured live):
 
-* The strings are one offset table (`0x712106`, 20 languages x 61 ids, index `lang*61 + id`); id 7 is "Normal", id 8 is "Screen Mode" and
-  id 57 is "Full Screen". The string getter `0x27dcf8` is reached through a function pointer, and no code of this image loads the ids
-  7, 8 and 57 together (the PS1 emulator does: `0xd938c`, `0x13e4b0`, ...), so the menu is built on the other side of the interface,
-  from data this image does not hold in a form that could be found.
+* The strings are one offset table (`0x712106`, 20 languages x 61 ids, index `lang*61 + id`); id 6 is "Off", id 7 is "Normal", id 8 is "Screen Mode"
+  and id 57 is "Full Screen". The string getter `0x27dcf8` is reached through a function pointer and no code of this image loads those ids
+  together, so the menu is built from data this analysis did not find. `ps2_emu.self` and `ps2_gxemu.self` carry the same strings.
 * The picture routine `0x282978` draws into a surface of exactly the output size, with no x offset; the pillar bars are not made there.
-* The output size and the video flags are filled from messages of the host (`0x1161b4`, `0x115f54`, `0x116ea4`); the aspect is declared
-  to the system by `sc` calls that were not identified. Widening the size returned by `0x115ee4` gives a black screen (`--wide`).
+* The output size and the video flags are filled from messages of the host (`0x1161b4`, `0x115f54`, `0x116ea4`). Widening the size
+  returned by `0x115ee4` gives a black screen (`--wide`).
+* The host sends settings bytes that the emulator stores in the device object (`+0xCC`, `+0xCD`, `+0xCE`, handler near `0x12fd40`); which one is the
+  screen mode is not yet known.
 
 A patch that guesses the aspect call could keep PS2 games from starting, so none is shipped. The way forward needs console
 experiments (a build per hypothesis, checked on the TV).

@@ -2,6 +2,11 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.07
+- The menu value "Normal" of Other settings > Screen mode is back to its stock name (v2.05 and v2.06 showed "4:3"). The item has three values, Off, Normal and Full Screen; only the picture crop of the Normal mode is ours.
+- Same installer as v2.06. The emulator image has no label edits any more (the rename is behind `--labels`).
+- Still open: the 16:9 stretch of Full Screen, see the README.
+
 ## v2.06
 - The package, the app and the file names carry the real release version instead of "2.00": the app title and "Patched (v...)" line, the version in the XMB, the package icon (drawn at build time from `VERSION`) and the files `ps2_netemu_v<version>.pkg` and `.self`.
 - Install and Restore show a progress bar with the stage (checking the package, reading, writing, verifying) and a percentage, and keep redrawing while the flash is written. Creating the memory cards (8 MB each, one per new ISO) has its own bar too. Before, the screen froze for the whole operation and looked like a crash.
