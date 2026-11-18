@@ -6,7 +6,7 @@ what changed in each release).
 
 ## Status
 
-Release `v2.07`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
+Release `v2.08`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
 
 | Feature | State |
 |---|---|
@@ -17,6 +17,8 @@ Release `v2.07`. Checked on the console with the Grandia III and Dragon Quest VI
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
 | Menu value "Normal" keeps its stock name | In `v2.07` (v2.05 and v2.06 renamed it to `4:3`; `--labels` still does) |
 | **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. |
+| No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
+| No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
 | Safe installer (backup, hash checks, restore) | In the package |
 | Progress bar on Install, Restore and the card creation; button icons; English only; version from `VERSION` | In `v2.06`. Host tests cover the progress reports (bar never goes back, ends at 100%); not yet seen on the console |
 | Installer works with any emulator file already there (stock, this release, any earlier build, unknown file with a backup), with `/dev_blind` mounted or not | In `v2.06`, covered by host tests with the real install logic; the list of earlier builds is the SHA-256 of every build made so far |

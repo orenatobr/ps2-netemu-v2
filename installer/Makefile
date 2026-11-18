@@ -32,7 +32,7 @@ PATCHED_SHA256	:=	$(shell shasum -a 256 $(MKROOT)payload/ps2_netemu_v2.bin | cut
 
 # release version, the single source for the app title, the package version and the file names (../VERSION)
 VERSION		:=	$(shell cat $(MKROOT)../VERSION)
-APP_VER		:=	$(shell printf '%02d.%02d' $(word 1,$(subst ., ,$(VERSION))) $(word 2,$(subst ., ,$(VERSION))))
+APP_VER		:=	$(shell printf '%02d.%02d' $$(expr $(word 1,$(subst ., ,$(VERSION))) + 0) $$(expr $(word 2,$(subst ., ,$(VERSION))) + 0))
 
 TITLE		:=	PS2 Emulator Patch
 APPID		:=	PS2NMPTCH
