@@ -1,11 +1,12 @@
-# ps2_netemu v2.00
+# ps2_netemu v2
 
-A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer package for it. The package is always
-`ps2_netemu_v2.00.pkg` (patch version 2.00); the release tag counts the published builds.
+A patched `ps2_netemu.self` (the PS3's software PS2 emulator) and an installer package for it. The package is named after the
+release: `ps2_netemu_v<version>.pkg` (the version lives in `VERSION`, the tag is `v<version>`, and [CHANGELOG.md](CHANGELOG.md) lists
+what changed in each release).
 
 ## Status
 
-Release `v2.05` (the package is always `ps2_netemu_v2.00.pkg`). Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
+Release `v2.06`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
 
 | Feature | State |
 |---|---|
@@ -15,12 +16,30 @@ Release `v2.05` (the package is always `ps2_netemu_v2.00.pkg`). Checked on the c
 | Installer creating the missing cards from the ISOs | The Dragon Quest VIII card appeared on the console right after the package ran (not made by `tools/make_cards.py`); a run of the app with a brand new ISO is the check still to do |
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
 | Menu: Other settings > Screen mode shows `4:3` instead of `Normal` in every language | Installed and checked by hash; on-screen text not yet seen |
-| **16:9 option in that menu (full screen stretch)** | **Not implemented.** The string "Full screen" exists in the emulator (id 57) but the code of the menu item and the point that sets the output aspect are not found yet; it needs experiments on the console |
+| **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. |
 | Safe installer (backup, hash checks, restore) | In the package |
+| Progress bar on Install, Restore and the card creation; button icons; English only; version from `VERSION` | In `v2.06`. Host tests cover the progress reports (bar never goes back, ends at 100%); not yet seen on the console |
+| Installer works with any emulator file already there (stock, this release, any earlier build, unknown file with a backup), with `/dev_blind` mounted or not | In `v2.06`, covered by host tests with the real install logic; the list of earlier builds is the SHA-256 of every build made so far |
 
 Limits: the emulator cannot create a card file, so a game without its card uses the shared `PS2.VM2`. The cards are made by the
 app: after adding ISOs, open **PS2 Emulator Patch** and press Cross again (or run `tools/make_cards.py` from the Mac). New cards start
 empty. The card name is cut at 52 bytes, so two different games that share their first 52 bytes would share a card.
+
+## 16:9: what was found
+
+The menu item "Screen mode" has one value in this emulator, "Normal" (shown as "4:3" by the patch). What is known, all by static
+analysis (nothing here could be measured on the console, because the console restarts into the emulator when a game starts):
+
+* The strings are one offset table (`0x712106`, 20 languages x 61 ids, index `lang*61 + id`); id 7 is "Normal", id 8 is "Screen Mode" and
+  id 57 is "Full Screen". The string getter `0x27dcf8` is reached through a function pointer, and no code of this image loads the ids
+  7, 8 and 57 together (the PS1 emulator does: `0xd938c`, `0x13e4b0`, ...), so the menu is built on the other side of the interface,
+  from data this image does not hold in a form that could be found.
+* The picture routine `0x282978` draws into a surface of exactly the output size, with no x offset; the pillar bars are not made there.
+* The output size and the video flags are filled from messages of the host (`0x1161b4`, `0x115f54`, `0x116ea4`); the aspect is declared
+  to the system by `sc` calls that were not identified. Widening the size returned by `0x115ee4` gives a black screen (`--wide`).
+
+A patch that guesses the aspect call could keep PS2 games from starting, so none is shipped. The way forward needs console
+experiments (a build per hypothesis, checked on the TV).
 
 ## What it is
 
@@ -118,7 +137,7 @@ schedule (launchd or cron) while the Mac and the console are on the same network
 
 ## Install
 
-1. Copy `ps2_netemu_v2.00.pkg` to the console (USB drive or `/dev_hdd0/packages`) and install it from the XMB
+1. Copy `ps2_netemu_v<version>.pkg` to the console (USB drive or `/dev_hdd0/packages`) and install it from the XMB
    (Game > Package Manager > Install Package Files).
 2. Open **PS2 Emulator Patch**. Press **Cross** (or Circle with the Japanese layout) to install, **Triangle** to restore
    the original, the other face button to exit.
@@ -140,7 +159,7 @@ on the real file: the original hashes validate with this code, and repacking the
 
 ```
 pip install -r requirements-dev.txt
-python ps2_netemu_patch.py ps2_netemu.self ps2_netemu_v2.00.self
+python ps2_netemu_patch.py ps2_netemu.self ps2_netemu_v2.bin
 PS2_NETEMU_SELF=ps2_netemu.self python -m pytest -q tests
 ```
 
@@ -155,7 +174,7 @@ Needs the [ps3dev](https://github.com/ps3dev/ps3dev) toolchain (`PS3DEV` and `PS
 python ps2_netemu_patch.py ps2_netemu.self installer/payload/ps2_netemu_v2.bin
 cd installer
 make pkg            # PS2NetemuPatch.gnpdrm.pkg
-tools/dist.sh       # ../dist/ps2_netemu_v2.00.pkg
+tools/dist.sh       # ../dist/ps2_netemu_v<version>.pkg (needs a CHANGELOG.md section for the version)
 tests/run.sh        # install/restore logic, runs on the Mac
 ```
 

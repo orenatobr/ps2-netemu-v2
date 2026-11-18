@@ -75,17 +75,24 @@ bool writeBlankCard(const std::string& path, const Bytes& head) {
     return true;
 }
 
-std::vector<std::string> ensureCards(const std::string& isoDir, const std::string& vmcDir, const Bytes& head) {
+std::vector<std::string> ensureCards(const std::string& isoDir, const std::string& vmcDir, const Bytes& head,
+                                     const Progress& progress) {
     std::vector<std::string> made;
     fsx::makeDirs(vmcDir);
     std::vector<std::string> names = fsx::listDir(isoDir);
     std::sort(names.begin(), names.end());
+    std::vector<std::string> missing;  // card file names still to create, each one once (the discs of a game share a card)
     for (const std::string& name : names) {
         if (!lowerExt(name, ".iso") && !lowerExt(name, ".bin")) continue;
         const std::string card = cardFileName(name);
         if (card.empty() || fsx::exists(vmcDir + "/" + card)) continue;
+        if (std::find(missing.begin(), missing.end(), card) == missing.end()) missing.push_back(card);
+    }
+    for (const std::string& card : missing) {
+        if (progress) progress(made.size(), missing.size());
         if (writeBlankCard(vmcDir + "/" + card, head)) made.push_back(card);
     }
+    if (progress && !missing.empty()) progress(missing.size(), missing.size());
     return made;
 }
 

@@ -39,6 +39,20 @@ void testCardNameRule() {
     assert(cards::cardTitle(std::string(200, 'A') + ".iso") == std::string(cards::kMaxTitle, 'A'));
 }
 
+void testEnsureCardsReportsProgress() {
+    Dir d;
+    write(d.iso("A (USA) (Disc 1).iso"), {1});
+    write(d.iso("A (USA) (Disc 2).iso"), {1});  // same card as disc 1: counted once
+    write(d.iso("B.iso"), {1});
+    std::vector<std::pair<std::size_t, std::size_t>> seen;
+    const auto made = cards::ensureCards(isoDir(d), d.vmc(), kHead, [&](std::size_t done, std::size_t total) { seen.emplace_back(done, total); });
+    assert(made.size() == 2);
+    assert((seen == std::vector<std::pair<std::size_t, std::size_t>>{{0, 2}, {1, 2}, {2, 2}}));  // before each card, then the end
+    seen.clear();
+    cards::ensureCards(isoDir(d), d.vmc(), kHead, [&](std::size_t done, std::size_t total) { seen.emplace_back(done, total); });
+    assert(seen.empty());  // nothing missing: no report
+}
+
 void testEnsureCardsCreatesOnlyMissingOnes() {
     Dir d;
     write(d.iso("Grandia III (USA) (Disc 1).iso"), {1});
@@ -77,6 +91,7 @@ int main() {
     std::srand(static_cast<unsigned>(std::time(nullptr)));
     testCardNameRule();
     testEnsureCardsCreatesOnlyMissingOnes();
+    testEnsureCardsReportsProgress();
     testThereIsNoLimitOnTheNumberOfGames();
     testWriteBlankCardRefusesAnEmptyHead();
     std::puts("all card tests passed");

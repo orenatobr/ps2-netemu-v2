@@ -3,19 +3,24 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
 namespace fsx {
 
+/// Called after every chunk of a long read, write or hash with the bytes done so far and the total.
+using Chunk = std::function<void(std::size_t done, std::size_t total)>;
+
 /// Reads a whole file as text. Returns false when it cannot be read.
 bool readFile(const std::string& path, std::string& out);
 
 /// Reads a whole file as bytes. Returns false when it cannot be read or is larger than `maxBytes`.
-bool readBytes(const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes = 64u * 1024 * 1024);
+bool readBytes(const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes = 64u * 1024 * 1024,
+               const Chunk& onChunk = nullptr);
 
 /// Writes a file, replacing it. Returns false on any short write.
-bool writeBytes(const std::string& path, const std::vector<std::uint8_t>& data);
+bool writeBytes(const std::string& path, const std::vector<std::uint8_t>& data, const Chunk& onChunk = nullptr);
 
 /// Copies a file. Returns false when the source cannot be read or the copy is short.
 bool copyFile(const std::string& from, const std::string& to);

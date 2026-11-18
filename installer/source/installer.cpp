@@ -1,5 +1,6 @@
 #include "installer.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "fsx.h"
@@ -38,12 +39,45 @@ void block(std::uint32_t h[8], const std::uint8_t* p) {
 
 bool readAll(const std::string& path, Bytes& out) { return fsx::readBytes(path, out); }
 
+/// Turns the chunk reports of each step into one bar that only moves forward.
+class Meter {
+public:
+    explicit Meter(const Progress& progress) : progress_(progress) {}
+
+    void at(Stage stage, float fraction) {
+        last_ = std::max(last_, std::min(fraction, 1.0f));
+        if (progress_) progress_(stage, last_);
+    }
+
+    /// Chunk callback that maps the step's own 0..1 onto the slice [lo, hi] of the whole bar.
+    fsx::Chunk slice(Stage stage, float lo, float hi) {
+        return [=, this](std::size_t done, std::size_t total) { at(stage, lo + (hi - lo) * (total ? float(done) / float(total) : 1.0f)); };
+    }
+
+private:
+    const Progress& progress_;
+    float last_ = 0;
+};
+
+/// Reads a file and hashes it, the first half of [lo, hi] for the read and the second half for the hash.
+bool readHashed(const std::string& path, Bytes& out, std::string& sha, Meter& m, Stage stage, float lo, float hi) {
+    const float mid = (lo + hi) / 2;
+    if (!fsx::readBytes(path, out, 64u * 1024 * 1024, m.slice(stage, lo, mid))) return false;
+    sha = sha256(out, m.slice(stage, mid, hi));
+    return true;
+}
+
 /// Writes `data` next to `path`, checks it by hash, then swaps it in. On failure `path` keeps its old content
-/// unless the swap itself failed half way, in which case `fallback` is written back.
-bool replaceFile(const std::string& path, const Bytes& data, const std::string& wantSha, const Bytes& fallback) {
+/// unless the swap itself failed half way, in which case `fallback` is written back. The write, the check of the
+/// new file and the final check share the part of the bar from `start` to the end (40%, 30% and 30%).
+bool replaceFile(const std::string& path, const Bytes& data, const std::string& wantSha, const Bytes& fallback, Meter& m,
+                 float start) {
+    const float w = (1.0f - start) * 0.4f, v = (1.0f - start) * 0.3f;
     const std::string tmp = path + ".new";
     Bytes check;
-    if (!fsx::writeBytes(tmp, data) || !readAll(tmp, check) || sha256(check) != wantSha) {
+    std::string sha;
+    if (!fsx::writeBytes(tmp, data, m.slice(Stage::Write, start, start + w)) ||
+        !readHashed(tmp, check, sha, m, Stage::Verify, start + w, start + w + v) || sha != wantSha) {
         fsx::removeFile(tmp);
         return false;
     }
@@ -53,15 +87,21 @@ bool replaceFile(const std::string& path, const Bytes& data, const std::string& 
         return false;
     }
     Bytes after;
-    return readAll(path, after) && sha256(after) == wantSha;
+    if (!readHashed(path, after, sha, m, Stage::Final, start + w + v, 1.0f) || sha != wantSha) return false;
+    m.at(Stage::Final, 1.0f);
+    return true;
 }
 
 }  // namespace
 
-std::string sha256(const Bytes& data) {
+std::string sha256(const Bytes& data, const fsx::Chunk& onChunk) {
     std::uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
     std::size_t i = 0;
-    for (; i + 64 <= data.size(); i += 64) block(h, data.data() + i);
+    for (; i + 64 <= data.size(); i += 64) {
+        block(h, data.data() + i);
+        if (onChunk && ((i + 64) % (64 * 1024) == 0)) onChunk(i + 64, data.size());
+    }
+    if (onChunk) onChunk(data.size(), data.size());
     std::uint8_t tail[128] = {0};
     const std::size_t rest = data.size() - i;
     if (rest) std::memcpy(tail, data.data() + i, rest);
@@ -77,38 +117,68 @@ std::string sha256(const Bytes& data) {
     return out;
 }
 
+static bool isOlder(const Config& cfg, const std::string& sha) {
+    return std::find(cfg.olderPatched.begin(), cfg.olderPatched.end(), sha) != cfg.olderPatched.end();
+}
+
 State detect(const Config& cfg) {
     Bytes cur;
     if (!readAll(cfg.target, cur)) return State::Missing;
     const std::string sha = sha256(cur);
     if (sha == cfg.patchedSha) return State::Patched;
     if (sha == cfg.stockSha) return State::Stock;
+    if (isOlder(cfg, sha)) return State::OlderPatch;
     return State::Unknown;
 }
 
-Outcome install(const Config& cfg, const Bytes& payload) {
-    if (sha256(payload) != cfg.patchedSha) return {false, "bad_payload"};
+Outcome install(const Config& cfg, const Bytes& payload, const Progress& progress) {
+    Meter m(progress);
+    m.at(Stage::Package, 0);
+    if (sha256(payload, m.slice(Stage::Package, 0.0f, 0.10f)) != cfg.patchedSha) return {false, "bad_payload"};
     Bytes cur;
-    if (!readAll(cfg.target, cur)) return {false, "missing"};
-    const std::string sha = sha256(cur);
-    if (sha == cfg.patchedSha) return {true, "already"};
-    if (sha != cfg.stockSha) return {false, "not_stock"};
+    std::string sha;
+    if (!readHashed(cfg.target, cur, sha, m, Stage::Read, 0.10f, 0.16f)) return {false, "missing"};
+    if (sha == cfg.patchedSha) {
+        m.at(Stage::Final, 1.0f);
+        return {true, "already"};
+    }
 
     Bytes saved;
-    if (!readAll(cfg.backup, saved) || sha256(saved) != cfg.stockSha) {  // missing or damaged: rebuild it from the live file
-        if (!fsx::writeBytes(cfg.backup, cur) || !readAll(cfg.backup, saved) || sha256(saved) != cfg.stockSha)
+    std::string savedSha;
+    const bool backupOk = readHashed(cfg.backup, saved, savedSha, m, Stage::Backup, 0.16f, 0.22f) && savedSha == cfg.stockSha;
+    // A patched build is replaced when the original is safe in the backup (any unknown file then comes from a patch, an
+    // older release or another tool), or when it is one of the builds this project shipped (a full copy of the stock
+    // file with our edits: replacing it cannot make things worse, but there is then no original to restore). Any other
+    // file without a valid backup is refused.
+    const bool known = sha == cfg.stockSha || isOlder(cfg, sha);
+    if (!known && !backupOk) return {false, "not_stock"};
+    if (sha != cfg.stockSha && !backupOk) {
+        if (!replaceFile(cfg.target, payload, cfg.patchedSha, cur, m, 0.30f)) return {false, "io_error"};
+        return {true, "installed_nobackup"};
+    }
+    if (!backupOk) {  // missing or damaged: rebuild it from the live file (which is the stock one here)
+        if (!fsx::writeBytes(cfg.backup, cur, m.slice(Stage::Backup, 0.22f, 0.27f)) ||
+            !readHashed(cfg.backup, saved, savedSha, m, Stage::Backup, 0.27f, 0.30f) || savedSha != cfg.stockSha)
             return {false, "io_error"};
     }
-    if (!replaceFile(cfg.target, payload, cfg.patchedSha, cur)) return {false, "io_error"};
+    if (!replaceFile(cfg.target, payload, cfg.patchedSha, cur, m, 0.30f)) return {false, "io_error"};
     return {true, "installed"};
 }
 
-Outcome restore(const Config& cfg) {
+Outcome restore(const Config& cfg, const Progress& progress) {
+    Meter m(progress);
+    m.at(Stage::Backup, 0);
     Bytes saved;
-    if (!readAll(cfg.backup, saved) || sha256(saved) != cfg.stockSha) return {false, "no_backup"};
+    std::string savedSha;
+    if (!readHashed(cfg.backup, saved, savedSha, m, Stage::Backup, 0.0f, 0.15f) || savedSha != cfg.stockSha)
+        return {false, "no_backup"};
     Bytes cur;
-    if (readAll(cfg.target, cur) && sha256(cur) == cfg.stockSha) return {true, "already"};
-    if (!replaceFile(cfg.target, saved, cfg.stockSha, cur)) return {false, "io_error"};
+    std::string sha;
+    if (readHashed(cfg.target, cur, sha, m, Stage::Read, 0.15f, 0.20f) && sha == cfg.stockSha) {
+        m.at(Stage::Final, 1.0f);
+        return {true, "already"};
+    }
+    if (!replaceFile(cfg.target, saved, cfg.stockSha, cur, m, 0.20f)) return {false, "io_error"};
     return {true, "restored"};
 }
 

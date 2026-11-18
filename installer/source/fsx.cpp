@@ -7,8 +7,11 @@
 #include <cstdio>
 
 namespace fsx {
+namespace {
+constexpr std::size_t kChunk = 64 * 1024;  // small enough for a smooth bar on the slow flash
+}  // namespace
 
-bool readBytes(const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes) {
+bool readBytes(const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes, const Chunk& onChunk) {
     out.clear();
     FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) return false;
@@ -17,7 +20,12 @@ bool readBytes(const std::string& path, std::vector<std::uint8_t>& out, std::siz
     ok = ok && size >= 0 && static_cast<std::size_t>(size) <= maxBytes && std::fseek(f, 0, SEEK_SET) == 0;
     if (ok) {
         out.resize(static_cast<std::size_t>(size));
-        ok = size == 0 || std::fread(out.data(), 1, out.size(), f) == out.size();
+        for (std::size_t done = 0; ok && done < out.size();) {
+            const std::size_t n = std::min(kChunk, out.size() - done);
+            ok = std::fread(out.data() + done, 1, n, f) == n;
+            done += n;
+            if (ok && onChunk) onChunk(done, out.size());
+        }
     }
     std::fclose(f);
     if (!ok) out.clear();
@@ -31,10 +39,16 @@ bool readFile(const std::string& path, std::string& out) {
     return true;
 }
 
-bool writeBytes(const std::string& path, const std::vector<std::uint8_t>& data) {
+bool writeBytes(const std::string& path, const std::vector<std::uint8_t>& data, const Chunk& onChunk) {
     FILE* f = std::fopen(path.c_str(), "wb");
     if (!f) return false;
-    const bool ok = data.empty() || std::fwrite(data.data(), 1, data.size(), f) == data.size();
+    bool ok = true;
+    for (std::size_t done = 0; ok && done < data.size();) {
+        const std::size_t n = std::min(kChunk, data.size() - done);
+        ok = std::fwrite(data.data() + done, 1, n, f) == n;
+        done += n;
+        if (ok && onChunk) onChunk(done, data.size());
+    }
     return (std::fclose(f) == 0) && ok;
 }
 
