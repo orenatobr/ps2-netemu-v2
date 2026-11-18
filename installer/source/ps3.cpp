@@ -161,12 +161,6 @@ Input poll() {
 void pump() { sysUtilCheckCallback(); }
 bool quitRequested() { return g_quit; }
 
-bool portuguese() {
-    s32 value = 0;
-    return sysUtilGetSystemParamInt(SYSUTIL_SYSTEMPARAM_ID_LANG, &value) == 0 &&
-           (value == SYSUTIL_LANG_PORTUGUESE_BR || value == SYSUTIL_LANG_PORTUGUESE_PT);
-}
-
 bool circleConfirms() { return g_circleConfirms; }
 
 void sleepMs(int ms) {

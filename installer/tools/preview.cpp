@@ -41,12 +41,18 @@ int main(int argc, char** argv) {
     const Shot shots[] = {
         {"en_stock", &ui::kEn, State::Stock, true, "", false},
         {"en_installed", &ui::kEn, State::Patched, true, ui::kEn.installed, true},
-        {"pt_unknown", &ui::kPt, State::Unknown, true, ui::kPt.notStock, false},
-        {"pt_noflash", &ui::kPt, State::Missing, false, ui::kPt.noAccess, false},
+        {"en_unknown", &ui::kEn, State::Unknown, true, ui::kEn.notStock, false},
+        {"en_noflash", &ui::kEn, State::Missing, false, ui::kEn.noAccess, false},
     };
     for (const Shot& s : shots) {
         ui::draw(c, *s.t, s.s, s.mounted, s.note, s.ok, false);
         save(out + "/" + s.name + ".png", c);
     }
+    ui::drawProgress(c, ui::kEn, true, installer::Stage::Write, 0.45f);
+    save(out + "/en_installing.png", c);
+    ui::drawProgress(c, ui::kEn, false, installer::Stage::Verify, 0.78f);
+    save(out + "/en_restoring.png", c);
+    ui::drawProgress(c, ui::kEn, true, installer::Stage::Cards, 0.5f);
+    save(out + "/en_cards.png", c);
     return 0;
 }

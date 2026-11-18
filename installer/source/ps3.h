@@ -23,7 +23,6 @@ bool inputInit();
 Input poll();
 void pump();
 bool quitRequested();
-bool portuguese();
 bool circleConfirms();  ///< true when circle is the confirm button
 void sleepMs(int ms);
 

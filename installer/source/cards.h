@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -26,8 +27,13 @@ std::string cardFileName(const std::string& isoName);
 /// complete or not at all. Returns false on any failure.
 bool writeBlankCard(const std::string& path, const Bytes& head);
 
+/// Called before each card is written with the cards done so far and the total to create (each card is 8 MB, so the
+/// caller can keep a progress bar moving).
+using Progress = std::function<void(std::size_t done, std::size_t total)>;
+
 /// Creates `<vmcDir>/<cardFileName>` for every .iso / .bin of `isoDir` whose card does not exist. Cards that exist are
 /// never touched. Returns the names of the cards created.
-std::vector<std::string> ensureCards(const std::string& isoDir, const std::string& vmcDir, const Bytes& head);
+std::vector<std::string> ensureCards(const std::string& isoDir, const std::string& vmcDir, const Bytes& head,
+                                     const Progress& progress = nullptr);
 
 }  // namespace cards

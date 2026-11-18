@@ -2,6 +2,7 @@
 // or puts the original back. The patched file travels inside this package.
 #include <sys/file.h>
 
+#include <iterator>
 #include <string>
 
 #include "cards.h"
@@ -23,6 +24,15 @@ namespace {
 constexpr const char* kStockSha = "bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a";
 constexpr const char* kTarget = "/dev_blind/ps2emu/ps2_netemu.self";
 constexpr const char* kBackup = "/dev_hdd0/ps2_netemu_stock.self";
+// Every other build this project put on a console (releases and test builds): a full copy of the stock file with our edits.
+constexpr const char* kOlderPatched[] = {
+    "30d6c72f9ced4d1685a1574127a8d21b28fb157252881e7974e9dd659703aba5", "1bc79d941650368004bddff1c13dfd39f747b165ae0f41307ab4465e026c5747",
+    "8c6900c100a2c07f00443ababbc1a4895fee668bc43097d8be7934fe09da964e", "a9fabddf62d92228af214335e9c26e8cfbe6f8a74fd03d0efa5510a738232649",
+    "727d6e9b6141b2f230539e836bedbb728bffb1d2e9672305acdc207195c4160e", "45f4a2997fa2a66b7d3c11fc4a42e77787fdebd5b66f4653ee455c1fc3493342",
+    "b1a72264de4007090e49e4bc1b8892c4a33080508e11201bdce3fd39e254739c", "ce2ba5b9d037690cd7641aaf56d2a39176ea3cb4a7a4e50b6fcf21815530ee22",
+    "dbdaf3ec69c882c7bef7c1e0ec6ef68563b06f0328fe9da36bb2212023fce70d", "7b19e46c924052df16240e1839d506354a45d8330cddb29fbb1163373c3fbf9e",
+    "0df73a5d95687056702fc846a1c6eb02b73b87ddc594ebf2afcf6c198c90d41d",
+};
 constexpr const char* kIsoDir = "/dev_hdd0/PS2ISO";
 constexpr const char* kCardDir = "/dev_hdd0/savedata/vmc";
 
@@ -32,7 +42,7 @@ int main() {
     int width = 0, height = 0;
     if (!ps3::videoInit(width, height)) return 1;
     ps3::inputInit();
-    const ui::Text& t = ps3::portuguese() ? ui::kPt : ui::kEn;
+    const ui::Text& t = ui::kEn;
     gfx::Canvas canvas(width, height, ps3::fontBytes(false), ps3::fontBytes(true));
 
     // webMAN (or an earlier run) may already have /dev_blind mounted: the mount then fails, but the files are there. Use them as
@@ -40,7 +50,7 @@ int main() {
     const bool alreadyMounted = fsx::exists(kTarget);
     const bool ownMount = !alreadyMounted && sysLv2FsMount("CELL_FS_IOS:BUILTIN_FLSH1", "CELL_FS_FAT", "/dev_blind", 0) == 0;
     const bool mounted = alreadyMounted || ownMount;
-    const installer::Config cfg{kTarget, kBackup, kStockSha, PATCHED_SHA256};
+    const installer::Config cfg{kTarget, kBackup, kStockSha, PATCHED_SHA256, {std::begin(kOlderPatched), std::end(kOlderPatched)}};
     const installer::Bytes payload(ps2_netemu_v2_bin, ps2_netemu_v2_bin + ps2_netemu_v2_bin_size);
 
     std::string note;
@@ -49,16 +59,37 @@ int main() {
     if (!mounted) note = t.noAccess;
     else if (state == installer::State::Patched && !fsx::exists(kBackup)) note = t.patchedNoBackup;
 
+    // Redraws the progress screen whenever the percentage or the stage changes (install, restore and the creation of the
+    // memory cards take a while: the flash is slow, the hashing runs on the CPU and each card is 8 MB, so without this the
+    // screen looked frozen).
+    bool installing = true;
+    int lastPct = -1;
+    installer::Stage lastStage = installer::Stage::Package;
+    const installer::Progress show = [&](installer::Stage stage, float fraction) {
+        const int pct = static_cast<int>(fraction * 100);
+        if (pct == lastPct && stage == lastStage) return;
+        lastPct = pct;
+        lastStage = stage;
+        ps3::pump();
+        ui::drawProgress(canvas, t, installing, stage, fraction);
+        ps3::videoPresent(canvas.pixels());
+    };
+
     while (!ps3::quitRequested()) {
         ps3::pump();
         const ps3::Input in = ps3::poll();
         if (mounted && (in.a || in.x)) {
-            const installer::Outcome o = in.a ? installer::install(cfg, payload) : installer::restore(cfg);
+            installing = in.a;
+            lastPct = -1;
+            const installer::Outcome o = in.a ? installer::install(cfg, payload, show) : installer::restore(cfg, show);
             note = ui::message(t, o);
             noteOk = o.ok;
             if (in.a && fsx::isDir(kIsoDir)) {  // the patch names the card after the game: make the ones that are missing
                 const cards::Bytes head(ps2_card_head_bin, ps2_card_head_bin + ps2_card_head_bin_size);
-                const auto made = cards::ensureCards(kIsoDir, kCardDir, head);
+                lastPct = -1;
+                const auto made = cards::ensureCards(kIsoDir, kCardDir, head, [&](std::size_t done, std::size_t total) {
+                    show(installer::Stage::Cards, total ? float(done) / float(total) : 1.0f);
+                });
                 if (!made.empty()) note += std::string(" ") + t.cardsMade + std::to_string(made.size());
             }
             state = installer::detect(cfg);
