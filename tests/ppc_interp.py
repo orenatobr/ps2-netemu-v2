@@ -172,6 +172,10 @@ class Cpu:
                 elif xo == 0:  # cmpw
                     a, b = _s32(self.r[ra]), _s32(self.r[rb])
                     self.cr[(w >> 23) & 7] = (int(a < b), int(a > b), int(a == b))
+                elif xo == 32:  # cmplw / cmpld (L bit)
+                    mask = M64 if (w >> 21) & 1 else M32
+                    a, b = self.r[ra] & mask, self.r[rb] & mask
+                    self.cr[(w >> 23) & 7] = (int(a < b), int(a > b), int(a == b))
                 elif xo == 339:  # mflr
                     self.r[rt] = self.lr
                 elif xo == 467:  # mtlr
