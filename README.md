@@ -152,7 +152,9 @@ What the public sources say: the stock PS2 Classics behaviour is to turn the con
 
 Why nothing was changed: no instruction in the emulator that powers the controller off at start could be found, and the Bluetooth link cannot be observed from the console (webMAN does not show it), so a patch would be blind and could break the controller input that works today. The turn off most likely happens before the emulator runs, on the system side.
 
-How to settle it with one test: restore the original emulator with the Triangle button of the installer, open the same PS2 game and see whether the controller also turns off. If it does, it is not this patch. If it does not, the patch is the cause and the next step is to bisect the patch edits one at a time.
+It is not this patch: a word by word comparison of the stock emulator with the build shipped in the package (the one on the console) finds changes in only these places: the segment size in the header (`0x64`), the memory card check hook (`0x12c988`), five single words in the picture code (`0x28394c`, `0x2839a8`, `0x283ad8`, `0x283c08`, `0x283d2c`) and the code cave at `0x2ff940`. None of them is in the controller or HID code, so the controller behaves as in the stock emulator.
+
+How to confirm it on the console with one test: restore the original emulator with the Triangle button of the installer, open the same PS2 game and see whether the controller also turns off. If it does, it is not this patch. If it does not, the patch is the cause and the next step is to bisect the patch edits one at a time.
 
 ## Experiments in the repository (not in the published package)
 
