@@ -134,7 +134,7 @@ void testEnsureUpgradesTheV209Config() {
     Dir d;
     assert(fsx::writeBytes(d.path("R.iso"), makeIso(kRadiataCnf)));
     Bytes v209 = configs::radiataConfig();
-    v209.erase(v209.begin() + 36, v209.begin() + 44);  // the 0x21 0 command v2.10 added
+    v209.erase(v209.begin() + 44, v209.begin() + 52);  // the 0x21 0 command v2.10 added
     assert(fsx::writeBytes(d.path("R.iso.CONFIG"), v209));
     assert(configs::ensureConfigs(d.root.string()).size() == 1);
     Bytes got;
