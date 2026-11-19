@@ -156,6 +156,8 @@ It is not this patch: a word by word comparison of the stock emulator with the b
 
 Confirmed on the console by the owner (2026-11-19): the original emulator, restored with the Triangle button of the installer, also turns the controller off when the same PS2 game starts, so this is the behaviour of the stock emulator and not of the patch. The webMAN MOD source was searched for the launch path of PS2 games and for pad and Bluetooth handling: its only pad code is for its own menus (`sys_hid_manager_read` in the VSH menu and sLaunch), nothing touches the controller when a PS2 game starts, so the launcher is not the cause either. That leaves the emulator's own start-up or the system switching to the PS2 emulation, which no patch of this package reaches.
 
+A search of the emulator code for the Bluetooth HCI opcodes (Disconnect `0x0406`, Reset `0x0C03`, Write Scan Enable `0x0C1A`) found the numbers `1030` (`0x406`) and `3098` (`0xC1A`) only as the first argument of calls to one function (`0x8e924`) that also gets a string pointer from the table of contents and a small constant. That shape is a trace or log call (an id, a message, a value, a line), not an HCI command being sent, and the Reset opcode does not appear at all. So the search did not find a power-off to neutralise either.
+
 The test that was used: restore the original emulator with the Triangle button of the installer, open the same PS2 game and see whether the controller also turns off. If it does, it is not this patch. If it does not, the patch is the cause and the next step is to bisect the patch edits one at a time.
 
 ## Experiments in the repository (not in the published package)
