@@ -138,6 +138,22 @@ between cards (verified byte for byte). The installer (`installer/source/cards.c
 Saves kept in the old shared `PS2.VM2` do not appear in a new per-game card. To start a game with its save, copy it into
 the card with `ps2card.copy_save`.
 
+## The controller turns off when a PS2 game starts (investigated, not changed)
+
+On the owner's console the DualShock turns off when a PS2 game is loaded and has to be turned on again with the PS button. Whether the emulator could keep it on was looked at in the stock `ps2_netemu.self` (SHA-256 `bad3e45c...`). Nothing in the package changes it.
+
+What the stock emulator has:
+- Its own HID and Bluetooth layer. The module names are in its read-only data: `HidGamepadMgr`, `HidPadWrapper`, `pad_manager`, `pairing_manager`, `authentication_manager` / `HID_AUTH`, `status_manager`, `deci3_pad`, `mouse_manager`, `mediacontrolkey_manager`, a `_sys_hid_core_thread`, and Bluetooth command names (`BT_REG`, `BT_END`, `BT_BD0`, `BT_BR0`...). They sit in pointer tables of the read-only data (`0x74bc30` to `0x74c430`) that no instruction reaches by an address it builds or by the table of contents (`r2 = 0xc600`); only the data tables point to them.
+- The in-game menu of the PS button, with the items "Reassign the Controller" and "Turn Off the Controller", and the message "Press the PS button.".
+- No import of the usual pad library (none of its function ids is in the file) and no LV2 HID system call. The calls with large numbers (`0x1002`, `0x1234`, `0x1237`) are exits followed by an endless loop.
+- A documented config command for the multitap and the order controllers are synced to the ports, nothing for powering a controller on or off.
+
+What the public sources say: the stock PS2 Classics behaviour is to turn the controller off when the emulator starts and when it ends, with "Press the PS button" shown in a corner, because the console switches between the XMB and the emulator. The webMAN MOD source has nothing about it, and its list of known patches for this emulator only has the debug menu.
+
+Why nothing was changed: no instruction in the emulator that powers the controller off at start could be found, and the Bluetooth link cannot be observed from the console (webMAN does not show it), so a patch would be blind and could break the controller input that works today. The turn off most likely happens before the emulator runs, on the system side.
+
+How to settle it with one test: restore the original emulator with the Triangle button of the installer, open the same PS2 game and see whether the controller also turns off. If it does, it is not this patch. If it does not, the patch is the cause and the next step is to bisect the patch edits one at a time.
+
 ## Experiments in the repository (not in the published package)
 
 Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufcard.py`.
