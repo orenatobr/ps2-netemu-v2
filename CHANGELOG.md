@@ -2,6 +2,10 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.10
+- Radiata Stories through webMAN, speed: the CONFIG the app writes now also turns the instruction cache emulation off (command `0x21 0`). This recovers part of the speed that webMAN's CUSTOM entry got from its loop edits, without touching the game code, so the experience points stay correct (the unpack hook, `0x0A` at `0x124D94`, is unchanged). A CONFIG written by v2.09 is upgraded.
+- Not measured on a console when this entry was written; if the experience goes wrong again, v2.09 is the known good state.
+
 ## v2.09
 - Radiata Stories (US, SLUS_212.62) through webMAN: the characters gained random experience and never leveled up. Cause found by comparing the two ways of running the game. A PS2 Classics package carries the official CONFIG of the game; an ISO mounted by webMAN gets the entry CUSTOM of webMAN's database copied beside it as `<iso>.CONFIG` on the first mount. That entry hooks the game's unpack function (0x124D94, a VU0 routine whose result is 1 off in the emulator) like the official one, but it also replaces three busy-wait loops (0x125004, 0x1250A4, 0x14205C) with a branch that is never taken, to gain speed. Two of them sit right next to the unpack function, so its VU0 results are used before they are ready and the experience tables come out wrong.
 - The app now writes a CONFIG without those edits (revision, xgkick delay 8, the two EE hooks of the game, smoothing off, title id) beside every ISO whose boot serial, read from the SYSTEM.CNF inside the image, is Radiata Stories (US). A CONFIG with the loop edits is replaced and kept as `<iso>.CONFIG.bak`; a CONFIG the owner edited is left alone. Press the confirm button in the app after copying the ISO.

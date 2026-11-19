@@ -1,4 +1,5 @@
 // Host tests for the ISO serial reader and the Radiata Stories CONFIG. Build and run: tests/run.sh
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -88,8 +89,11 @@ void testTheWebmanEntryIsRecognisedAndOursIsNot() {
     assert(configs::hasRadiataLoopEdits(kWebmanCustom));
     assert(!configs::hasRadiataLoopEdits(configs::radiataConfig()));
     const Bytes& c = configs::radiataConfig();  // header, hooks 0x124D94 / 0x1AF618, smoothing, title at the end
-    assert(c.size() == 54 + 4 && c[0] == 0x3D && c[4] == 0x57 && c[5] == 0x44);
+    assert(c.size() == 62 + 4 && c[0] == 0x3D && c[4] == 0x57 && c[5] == 0x44);
     assert(std::string(c.end() - 10, c.end()) == "SLUS-21262");
+    // EXP fix: the TriAce unpack hook (0x0A at 0x1AF618) and the $at = 0 hook (0x0B) must survive any speed variant
+    const Bytes expHooks = {0x01, 0, 0, 0, 0x94, 0x4d, 0x12, 0, 0x0a, 0, 0, 0, 0x01, 0, 0, 0, 0x18, 0xf6, 0x1a, 0, 0x0b, 0, 0, 0, 0x44, 0, 0, 0, 0x21, 0, 0, 0, 0, 0, 0, 0};
+    assert(std::search(c.begin(), c.end(), expHooks.begin(), expHooks.end()) != c.end());
 }
 
 void testEnsureWritesWhenMissing() {
@@ -126,6 +130,17 @@ void testEnsureLeavesTheOwnersOwnConfig() {
     assert(!fs::exists(d.path("R.iso.CONFIG.bak")));
 }
 
+void testEnsureUpgradesTheV209Config() {
+    Dir d;
+    assert(fsx::writeBytes(d.path("R.iso"), makeIso(kRadiataCnf)));
+    Bytes v209 = configs::radiataConfig();
+    v209.erase(v209.begin() + 36, v209.begin() + 44);  // the 0x21 0 command v2.10 added
+    assert(fsx::writeBytes(d.path("R.iso.CONFIG"), v209));
+    assert(configs::ensureConfigs(d.root.string()).size() == 1);
+    Bytes got;
+    assert(fsx::readBytes(d.path("R.iso.CONFIG"), got) && got == configs::radiataConfig());
+}
+
 }  // namespace
 
 int main() {
@@ -135,6 +150,7 @@ int main() {
     testEnsureWritesWhenMissing();
     testEnsureReplacesTheWebmanEntryAndKeepsABackup();
     testEnsureLeavesTheOwnersOwnConfig();
+    testEnsureUpgradesTheV209Config();
     std::puts("all config tests passed");
     return 0;
 }
