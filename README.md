@@ -19,7 +19,7 @@ Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VI
 | **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. |
 | No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
 | No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
-| Radiata Stories (US) experience points through webMAN | In `v2.09`: the app writes a CONFIG without the webMAN loop edits beside the ISO (see "Radiata Stories" below). Not played yet |
+| Radiata Stories (US) experience points through webMAN | Fixed in `v2.09`, speed in `v2.10`: the app writes a CONFIG with the unpack hook and only the safe loop edit beside the ISO (see "Radiata Stories" below). Played on a console |
 | Safe installer (backup, hash checks, restore) | In the package |
 | Progress bar on Install, Restore and the card creation; button icons; English only; version from `VERSION` | In `v2.06`. Host tests cover the progress reports (bar never goes back, ends at 100%); not yet seen on the console |
 | Installer works with any emulator file already there (stock, this release, any earlier build, unknown file with a backup), with `/dev_blind` mounted or not | In `v2.06`, covered by host tests with the real install logic; the list of earlier builds is the SHA-256 of every build made so far |
@@ -57,8 +57,9 @@ edits at `0x125004` and `0x1250A4` are in the same routine (the game code at `0x
 tables read afterwards (the experience tables) are wrong: a battle shows the experience ticking down to 1, resetting to the level 1 value and the characters never
 level up. Source of the symptom: the PSX-Place thread "Radiata Stories Exp bug" (the PS2 Classics config works, the database one does not).
 
-`configs.cpp` writes the `GX` content plus `0x44` (58 bytes) and `isoinfo.cpp` reads the serial of each ISO from its `SYSTEM.CNF`. Only the US serial is handled, because
-the hook addresses are the ones of that release. Not verified by playing a battle.
+`configs.cpp` writes the `GX` content plus `0x44` and the one loop edit at `0x14205C` (78 bytes, since `v2.10`), and `isoinfo.cpp` reads the serial of each ISO
+from its `SYSTEM.CNF`. Only the US serial is handled, because the hook addresses are the ones of that release. Played in a battle on a console: the experience
+is right and characters level up. Turning the instruction cache emulation off (`0x21 0`) was tried for speed and broke the experience again.
 
 ## What it is
 

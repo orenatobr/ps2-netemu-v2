@@ -1,4 +1,5 @@
 // Host tests for the ISO serial reader and the Radiata Stories CONFIG. Build and run: tests/run.sh
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -88,8 +89,14 @@ void testTheWebmanEntryIsRecognisedAndOursIsNot() {
     assert(configs::hasRadiataLoopEdits(kWebmanCustom));
     assert(!configs::hasRadiataLoopEdits(configs::radiataConfig()));
     const Bytes& c = configs::radiataConfig();  // header, hooks 0x124D94 / 0x1AF618, smoothing, title at the end
-    assert(c.size() == 54 + 4 && c[0] == 0x3D && c[4] == 0x57 && c[5] == 0x44);
+    assert(c.size() == 74 + 4 && c[0] == 0x3D && c[4] == 0x57 && c[5] == 0x44);
     assert(std::string(c.end() - 10, c.end()) == "SLUS-21262");
+    // EXP fix: the TriAce unpack hook (0x0A at 0x124D94) and the $at = 0 hook (0x0B) must survive any speed variant
+    const Bytes expHooks = {0x01, 0, 0, 0, 0x94, 0x4d, 0x12, 0, 0x0a, 0, 0, 0, 0x01, 0, 0, 0, 0x18, 0xf6, 0x1a, 0, 0x0b, 0, 0, 0};
+    assert(std::search(c.begin(), c.end(), expHooks.begin(), expHooks.end()) != c.end());
+    // speed: only the loop at 0x14205C, far from the unpack function; the ones at 0x125004 / 0x1250A4 break the experience
+    const Bytes loop = {0x5c, 0x20, 0x14, 0x00, 0xfa, 0xff, 0x00, 0x10, 0xfa, 0xff, 0x00, 0x14};
+    assert(std::search(c.begin(), c.end(), loop.begin(), loop.end()) != c.end());
 }
 
 void testEnsureWritesWhenMissing() {
@@ -115,6 +122,18 @@ void testEnsureReplacesTheWebmanEntryAndKeepsABackup() {
     assert(!fs::exists(d.path("R.iso.CONFIG.new")));
 }
 
+void testEnsureUpgradesTheV209Config() {
+    Dir d;
+    assert(fsx::writeBytes(d.path("R.iso"), makeIso(kRadiataCnf)));
+    Bytes v209 = configs::radiataConfig();
+    v209.erase(v209.begin() + 44, v209.begin() + 64);  // the loop edit v2.10 added
+    assert(fsx::writeBytes(d.path("R.iso.CONFIG"), v209));
+    assert(configs::ensureConfigs(d.root.string()).size() == 1);
+    Bytes got, bak;
+    assert(fsx::readBytes(d.path("R.iso.CONFIG"), got) && got == configs::radiataConfig());
+    assert(fsx::readBytes(d.path("R.iso.CONFIG.bak"), bak) && bak == v209);
+}
+
 void testEnsureLeavesTheOwnersOwnConfig() {
     Dir d;
     assert(fsx::writeBytes(d.path("R.iso"), makeIso(kRadiataCnf)));
@@ -134,6 +153,7 @@ int main() {
     testTheWebmanEntryIsRecognisedAndOursIsNot();
     testEnsureWritesWhenMissing();
     testEnsureReplacesTheWebmanEntryAndKeepsABackup();
+    testEnsureUpgradesTheV209Config();
     testEnsureLeavesTheOwnersOwnConfig();
     std::puts("all config tests passed");
     return 0;
