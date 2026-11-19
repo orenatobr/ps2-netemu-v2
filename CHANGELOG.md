@@ -2,6 +2,12 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.08
+- No blur: the emulator's generic texture binder (`0x263a04`) wrote a LINEAR min and mag sampler filter (`0x02022000`) for every texture it binds; it now writes NEAREST (`0x01012000`, the word the state reset of the draw code already uses). One instruction changes (`lis r0,514` to `lis r0,257`).
+- No dither: the RSX dither switch (method `0x0300`) was never written by the emulator, so the hardware default (on) stayed. The state reset now also writes it as 0 (a small cave that only appends the command when the command buffer has room, otherwise the stock code runs unchanged).
+- Not measured on a console: the emulator restarts into itself when a game starts, so these two changes come from reading the code and from host tests that run the patched instructions. If a game looks wrong, restore the original with Triangle in the app; `--keep-filter` and `--keep-dither` rebuild the image without either change.
+- The installer is the one of v2.07.
+
 ## v2.07
 - The menu value "Normal" of Other settings > Screen mode is back to its stock name (v2.05 and v2.06 showed "4:3"). The item has three values, Off, Normal and Full Screen; only the picture crop of the Normal mode is ours.
 - Same installer as v2.06. The emulator image has no label edits any more (the rename is behind `--labels`).

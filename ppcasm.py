@@ -70,6 +70,8 @@ def assemble(base: int, lines: list[tuple]) -> list[int]:
             w = (31 << 26) | (_r(a[0]) << 21) | (19 << 1)
         elif m == "cmplwi":
             w = (10 << 26) | (7 << 23) | (_r(a[0]) << 16) | _i16(a[1])
+        elif m == "cmpld":  # unsigned 64-bit compare, cr7
+            w = (31 << 26) | (7 << 23) | (1 << 21) | (_r(a[0]) << 16) | (_r(a[1]) << 11) | (32 << 1)
         elif m == "cmpw":
             w = (31 << 26) | (7 << 23) | (_r(a[0]) << 16) | (_r(a[1]) << 11)
         elif m in ("lbz", "lwz", "stw", "stb"):

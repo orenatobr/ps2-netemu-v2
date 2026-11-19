@@ -22,6 +22,7 @@ import cave_cardfile
 import cave_cardname
 import cave_crop
 import cave_defname
+import cave_nodither
 import cave_probe
 import cave_serial
 import cave_slots
@@ -38,6 +39,7 @@ WIDE_CAVE_VA = CAVE_VA + CAVE_SIZE - 0x20  # after the largest card cave (the sl
 CARD_CAVE_VA = CAVE_VA + 0xA0  # the crop cave uses the first 0x98 bytes
 SERIAL_CAVE_VA = CAVE_VA + 0x200  # the serial capture (528 bytes); the card cave of the serial plan sits at CARD_CAVE_VA
 PATH_VA = CAVE_VA + 0x440  # 64 bytes: the card path of the disc, empty when none
+NODITHER_CAVE_VA = CAVE_VA + 0x5C0  # after the buffer card cave (it ends at +0x5a0), 0x34 bytes
 SCRATCH_VA = 0x74E940  # writable: the unused tail of the last page of the data segment (made official by extend_data)
 SCRATCH_EXTRA = 0x100
 
@@ -254,6 +256,21 @@ def screen_mode_label_edits() -> tuple[Edit, ...]:
     )
 
 
+# The generic texture binder (0x263a04) writes the sampler filter of every texture it binds: 0x02022000 = min and mag LINEAR. The state
+# reset of the draw code (0x280e08) uses 0x01012000 = min and mag NEAREST, the same word with 1 where the binder has 2.
+def nofilter_edits() -> tuple[Edit, ...]:
+    """Remove the blur: textures are sampled NEAREST instead of LINEAR (lis r0,514 becomes lis r0,257 in the texture binder)."""
+    return (word(0x263AE8, 0x3C000202, 0x3C000101, "texture filter min/mag LINEAR -> NEAREST (0x02022000 -> 0x01012000)"),)
+
+
+def nodither_edits() -> tuple[Edit, ...]:
+    """Remove the dither: the RSX state reset also writes method 0x0300 (dither enable) = 0 (cave_nodither)."""
+    patches, used = cave_nodither.build(NODITHER_CAVE_VA)
+    if NODITHER_CAVE_VA + used > CAVE_VA + CAVE_SIZE:
+        raise ValueError("the no dither cave does not fit in the text page")
+    return cave_edits(patches)
+
+
 def probe_edits(select: bool = False) -> tuple[Edit, ...]:
     """EXPERIMENT: step 1 of the card hook, file calls only (see cave_probe); `select` picks the card by the cfg.bin format."""
     return cave_edits(cave_probe.build(CARD_CAVE_VA, select)[0])
@@ -316,6 +333,10 @@ if __name__ == "__main__":
         chosen = crop_edits() + bufcard_edits()
     if "--wide" in sys.argv:
         chosen = chosen + wide_edits()
+    if not any(a in sys.argv for a in ("--keep-filter", "--crop-only", "--probe", "--probe-select")):
+        chosen = chosen + nofilter_edits()
+    if not any(a in sys.argv for a in ("--keep-dither", "--crop-only", "--probe", "--probe-select")):
+        chosen = chosen + nodither_edits()
     if "--labels" in sys.argv:  # opt-in: the menu value keeps its stock name "Normal" (the item is Off / Normal / Full Screen)
         chosen = chosen + screen_mode_label_edits()
     main(sys.argv[1], sys.argv[2], chosen, scratch="--file-card" in sys.argv)
