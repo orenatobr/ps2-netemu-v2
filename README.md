@@ -6,7 +6,7 @@ what changed in each release).
 
 ## Status
 
-Release `v2.08`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
+Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
 
 | Feature | State |
 |---|---|
@@ -19,6 +19,7 @@ Release `v2.08`. Checked on the console with the Grandia III and Dragon Quest VI
 | **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. |
 | No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
 | No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
+| Radiata Stories (US) experience points through webMAN | In `v2.09`: the app writes a CONFIG without the webMAN loop edits beside the ISO (see "Radiata Stories" below). Not played yet |
 | Safe installer (backup, hash checks, restore) | In the package |
 | Progress bar on Install, Restore and the card creation; button icons; English only; version from `VERSION` | In `v2.06`. Host tests cover the progress reports (bar never goes back, ends at 100%); not yet seen on the console |
 | Installer works with any emulator file already there (stock, this release, any earlier build, unknown file with a backup), with `/dev_blind` mounted or not | In `v2.06`, covered by host tests with the real install logic; the list of earlier builds is the SHA-256 of every build made so far |
@@ -44,6 +45,20 @@ game starts, so nothing could be measured live):
 
 A patch that guesses the aspect call could keep PS2 games from starting, so none is shipped. The way forward needs console
 experiments (a build per hypothesis, checked on the TV).
+
+## Radiata Stories: random experience through webMAN
+
+A PS2 Classics package runs the game with the official CONFIG; an ISO mounted by webMAN runs with `<iso>.CONFIG`, which webMAN fills on the first
+mount from its database (`CUSTOM`, then `NET`, `GX`, `SOFT`). For SLUS_212.62 the `CUSTOM` entry (112 bytes) is the `GX` one (revision `0x4457`, xgkick
+delay 8, EE hook function `0x0A` at `0x124D94`, hook `0x0B` at `0x1AF618`) plus smoothing off (`0x44`), instruction cache emulation off (`0x21 0`) and four
+`EE_INSN_REPLACE32` edits: `0x125004`, `0x1250A4` and `0x14205C` change `b -6` (`0x1000FFFA`) into `bne zero, zero` (`0x1400FFFA`), and `0x22F754` changes
+`li v1,1` into `move v1,zero`. The hook `0x0A` is the TriAce unpack fix: the game unpacks data with VU0 and the result is 1 off in the emulator. The
+edits at `0x125004` and `0x1250A4` are in the same routine (the game code at `0x124D90` is `sqc2 vf3,0(v0)`), so they remove the wait for that VU0 work and the
+tables read afterwards (the experience tables) are wrong: a battle shows the experience ticking down to 1, resetting to the level 1 value and the characters never
+level up. Source of the symptom: the PSX-Place thread "Radiata Stories Exp bug" (the PS2 Classics config works, the database one does not).
+
+`configs.cpp` writes the `GX` content plus `0x44` (58 bytes) and `isoinfo.cpp` reads the serial of each ISO from its `SYSTEM.CNF`. Only the US serial is handled, because
+the hook addresses are the ones of that release. Not verified by playing a battle.
 
 ## What it is
 

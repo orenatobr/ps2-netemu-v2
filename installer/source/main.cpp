@@ -6,6 +6,7 @@
 #include <string>
 
 #include "cards.h"
+#include "configs.h"
 #include "gfx.h"
 #include "fsx.h"
 #include "installer.h"
@@ -91,6 +92,10 @@ int main() {
                     show(installer::Stage::Cards, total ? float(done) / float(total) : 1.0f);
                 });
                 if (!made.empty()) note += std::string(" ") + t.cardsMade + std::to_string(made.size());
+            }
+            if (in.a && fsx::isDir(kIsoDir)) {  // webMAN copies a CONFIG beside Radiata Stories that breaks its experience points
+                const auto fixed = configs::ensureConfigs(kIsoDir);
+                if (!fixed.empty()) note += std::string(" ") + t.configsFixed + std::to_string(fixed.size());
             }
             state = installer::detect(cfg);
         }

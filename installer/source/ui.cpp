@@ -20,7 +20,7 @@ const Text kEn = {"PS2 emulator patch v" APP_VERSION,
                   "The package is damaged. Nothing was changed.", "No backup found. Nothing to restore.",
                   "Write failed. The original was kept; try again.", "Could not open the system files. This needs custom firmware.",
                   "The patch is installed but there is no backup of the original, so Triangle cannot restore it. Copy the original to /dev_hdd0/ps2_netemu_stock.self.",
-                  "Memory cards created for your PS2 games: ",
+                  "Memory cards created for your PS2 games: ", "Game CONFIG fixed (Radiata Stories experience points): ",
                   "Installing the patch...", "Restoring the original...", "Do not turn off the console.",
                   {"Checking the package", "Reading the emulator file", "Checking the backup", "Writing the file",
                    "Verifying the new file", "Final check", "Creating the memory cards"}};

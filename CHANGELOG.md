@@ -2,6 +2,12 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.09
+- Radiata Stories (US, SLUS_212.62) through webMAN: the characters gained random experience and never leveled up. Cause found by comparing the two ways of running the game. A PS2 Classics package carries the official CONFIG of the game; an ISO mounted by webMAN gets the entry CUSTOM of webMAN's database copied beside it as `<iso>.CONFIG` on the first mount. That entry hooks the game's unpack function (0x124D94, a VU0 routine whose result is 1 off in the emulator) like the official one, but it also replaces three busy-wait loops (0x125004, 0x1250A4, 0x14205C) with a branch that is never taken, to gain speed. Two of them sit right next to the unpack function, so its VU0 results are used before they are ready and the experience tables come out wrong.
+- The app now writes a CONFIG without those edits (revision, xgkick delay 8, the two EE hooks of the game, smoothing off, title id) beside every ISO whose boot serial, read from the SYSTEM.CNF inside the image, is Radiata Stories (US). A CONFIG with the loop edits is replaced and kept as `<iso>.CONFIG.bak`; a CONFIG the owner edited is left alone. Press the confirm button in the app after copying the ISO.
+- Not measured on a console: the speed gain of the removed edits is lost (the game can stutter in crowded places, as it does with the PS2 Classics package), and the fix rests on reading the game code and the CONFIG command list, not on a played battle.
+- The emulator image is the one of v2.08.
+
 ## v2.08
 - No blur: the emulator's generic texture binder (`0x263a04`) wrote a LINEAR min and mag sampler filter (`0x02022000`) for every texture it binds; it now writes NEAREST (`0x01012000`, the word the state reset of the draw code already uses). One instruction changes (`lis r0,514` to `lis r0,257`).
 - No dither: the RSX dither switch (method `0x0300`) was never written by the emulator, so the hardware default (on) stayed. The state reset now also writes it as 0 (a small cave that only appends the command when the command buffer has room, otherwise the stock code runs unchanged).

@@ -12,6 +12,7 @@ struct Text {
     const char *title, *subtitle, *file, *stock, *patched, *olderPatch, *unknown, *missing, *install, *restore, *exit;
     const char *installed, *installedNoBackup, *already, *restored, *notStock, *badPayload, *noBackup, *ioError, *noAccess, *patchedNoBackup;
     const char* cardsMade;  ///< followed by the number of memory cards the install created
+    const char* configsFixed;  ///< followed by the number of game CONFIG files the install wrote (Radiata Stories)
     const char *installing, *restoring, *keepOn;
     const char* stage[7];  ///< One line per installer::Stage, in enum order.
 };
