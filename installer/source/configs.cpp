@@ -19,7 +19,7 @@ bool hasExtension(const std::string& name, const char* ext) {
 }
 
 // Commands are little endian 32 bit words: id, then its parameters.
-Bytes makeRadiataConfig() {
+Bytes makeRadiataConfig(bool loopEdit) {
     Bytes out;
     auto word = [&out](std::uint32_t v) {
         for (int s = 0; s < 32; s += 8) out.push_back(static_cast<std::uint8_t>(v >> s));
@@ -29,6 +29,9 @@ Bytes makeRadiataConfig() {
     word(0x01), word(0x124D94), word(0x0A);    // EE hook: TriAce unpack function, add 1 to the unpacked data
     word(0x01), word(0x1AF618), word(0x0B);    // EE hook: set $at to 0
     word(0x44);                                // disable smoothing
+    if (loopEdit) {                            // EE_INSN_REPLACE32, one entry: the busy-wait loop at 0x14205C never waits (speed)
+        word(0x0A), word(1), word(0x14205C), word(0x1000FFFA), word(0x1400FFFA);
+    }
     word(0x00);                                // title id, always last; the file ends right after it, like the shipped ones
     for (const char* c = "SLUS-21262"; *c; ++c) out.push_back(static_cast<std::uint8_t>(*c));
     return out;
@@ -37,7 +40,7 @@ Bytes makeRadiataConfig() {
 }  // namespace
 
 const Bytes& radiataConfig() {
-    static const Bytes config = makeRadiataConfig();
+    static const Bytes config = makeRadiataConfig(true);
     return config;
 }
 
@@ -57,7 +60,8 @@ std::vector<std::string> ensureConfigs(const std::string& isoDir) {
         Bytes current;
         if (fsx::exists(path)) {
             if (!fsx::readBytes(path, current, 1u << 20)) continue;
-            if (current == radiataConfig() || !hasRadiataLoopEdits(current)) continue;  // already ours, or the owner's own file
+            static const Bytes v209 = makeRadiataConfig(false);  // what v2.09 wrote
+            if (current == radiataConfig() || !(hasRadiataLoopEdits(current) || current == v209)) continue;  // already ours, or the owner's own file
             if (!fsx::exists(path + ".bak")) fsx::writeBytes(path + ".bak", current);
         }
         const std::string tmp = path + ".new";
