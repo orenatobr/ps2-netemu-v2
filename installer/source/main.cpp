@@ -32,7 +32,7 @@ constexpr const char* kOlderPatched[] = {
     "727d6e9b6141b2f230539e836bedbb728bffb1d2e9672305acdc207195c4160e", "45f4a2997fa2a66b7d3c11fc4a42e77787fdebd5b66f4653ee455c1fc3493342",
     "b1a72264de4007090e49e4bc1b8892c4a33080508e11201bdce3fd39e254739c", "ce2ba5b9d037690cd7641aaf56d2a39176ea3cb4a7a4e50b6fcf21815530ee22",
     "dbdaf3ec69c882c7bef7c1e0ec6ef68563b06f0328fe9da36bb2212023fce70d", "7b19e46c924052df16240e1839d506354a45d8330cddb29fbb1163373c3fbf9e",
-    "0df73a5d95687056702fc846a1c6eb02b73b87ddc594ebf2afcf6c198c90d41d",
+    "0df73a5d95687056702fc846a1c6eb02b73b87ddc594ebf2afcf6c198c90d41d", "23f0e17b6561c0db6cf7f90d191b87f1b671de621e16c565773e08abf8be6a11",
 };
 constexpr const char* kIsoDir = "/dev_hdd0/PS2ISO";
 constexpr const char* kCardDir = "/dev_hdd0/savedata/vmc";

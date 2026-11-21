@@ -6,7 +6,7 @@ what changed in each release).
 
 ## Status
 
-Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs.
+Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs. `v2.11` is a test build that forces Full Screen at the start of a game (see CHANGELOG.md).
 
 | Feature | State |
 |---|---|
