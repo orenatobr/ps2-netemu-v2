@@ -80,6 +80,19 @@ Other things learned on the way:
   (`crop_edits`, `bufcard_edits`, `nofilter_edits`, `nodither_edits`), remove the `0x6c0` text extension from program header 0 and repack with the
   payload as the container. The SHA-256 comes out as `bad3e45c...c80a`, so the file is the original.
 
+#### The live Screen Mode and the shortcut experiment
+
+The value that changes while a game runs is not the `+0x28` byte. The video thread (`0x262a58`, loop at `0x262d00`) waits on an event group and, when
+bit `0x00800000` comes back, asks the display object (`0x30700d0`) for the mode through its method at `+0x88` and stores `mode == 2` as the Full Screen
+flag (`+0x1c` of the display configuration at `0x306f380`). Method `+0x88` of the real class (vtable `0x949cb8`, chosen by `0x27c83c`) reads the word at
+`0x3172f70` (TOC slot `-0x2df0`) and `+0x90` writes it. That word is the live Screen Mode: 1 Normal, 2 Full Screen. The video start-up stores the
+Initial Up Convert in it. No code of the emulator sets the event bit; it comes from the system, which is also why the menu works while a game runs.
+
+`python ps2_netemu_patch.py ps2_netemu.self out.self --hotkey` (`cave_hotkey.py`) hooks the DualShock 3 parser at `0xe8720`. While SELECT, L1 and R1 are
+held it switches that word between 1 and 2 once per press (one byte of state at `0x3175470`, in the zero filled tail of the data). It does not wake
+the video thread, so the picture changes only when the thread next recalculates (for example when the game changes its video mode), and it is not known
+whether that is enough. Only the generic report path is hooked (the DualShock 3 and similar); the two device types that branch earlier are not. Not checked on a console.
+
 #### Experiment: force Full Screen at the start
 
 `python ps2_netemu_patch.py ps2_netemu.self out.self --up-convert=2` replaces the one `lbz` at `0x11ad18` with `li r0,2`, so the settings copy stores
@@ -210,6 +223,8 @@ Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufc
 * `--wide` (`cave_wide.py`): returns the video output width times 4/3. Meant for 16:9 games that squeeze the picture into the 4:3 frame
   (Dragon Quest VIII); on the console it gave a **black screen** (the getter is used for more than the picture rectangle), so it is
   not a way forward as it is. The 16:9 menu option is the open item (see Status).
+* `--hotkey` (`cave_hotkey.py`): SELECT + L1 + R1 switches the live Screen Mode word between Normal and Full Screen. See "The live Screen Mode and
+  the shortcut experiment". Not checked on a console.
 * `--up-convert=0|1|2` (`up_convert_edits`): the settings copy stores that Screen Mode (Off, Normal, Full Screen) instead of the byte the host sent.
   See "Screen Mode is the Up Convert setting". Not checked on a console.
 

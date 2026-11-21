@@ -2,6 +2,12 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.12
+- Test build of the shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen. The emulator image hooks the DualShock 3 report parser (`0xe8720`) and flips the live Screen Mode word (`0x3172f70`) once per press (`ps2_netemu_patch.py --hotkey`). Everything else is the image of v2.10, so the Screen Mode starts as the system sets it.
+- Not known: the video thread recalculates the Full Screen flag when the system raises an event, and nothing in this build raises it. The picture may change only at the next video mode change of the game, or not at all. Nothing was checked on a console. Please report what you see right after pressing the combination, and after the game changes its video mode.
+- The shortcut works with the DualShock 3 report path only. Restore the original with the Triangle button of the app if anything misbehaves.
+- The app lists the v2.11 image among the earlier builds, so this package installs over v2.11 and v2.10.
+
 ## v2.11
 - Test build, not a finished feature. The emulator image stores Full Screen (2) as the "Up Convert" setting, the one behind the Screen Mode of the menu, whatever value the system sent when a game starts (`ps2_netemu_patch.py --up-convert=2`, one word at `0x11ad18`). Everything else is the image of v2.10.
 - What to check on the console: start a game and see whether the picture fills the screen from the first frame. If it does, the Screen Mode is applied when the video starts. If it does not, the screen scaling is entirely on the system side. Either answer decides how the SELECT + R1 + L1 shortcut can be built.
