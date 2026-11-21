@@ -5,7 +5,7 @@ replacements at virtual addresses plus byte replacements in the data segment; ev
 the original bytes first and refuses to touch anything else.
 
 Usage:
-    python ps2_netemu_patch.py INPUT.self OUTPUT.self [--experiment]
+    python ps2_netemu_patch.py INPUT.self OUTPUT.self [--experiment] [--up-convert=0|1|2]
 """
 from __future__ import annotations
 
@@ -220,6 +220,21 @@ def wide_edits() -> tuple[Edit, ...]:
     return cave_edits(cave_wide.build(WIDE_CAVE_VA)[0])
 
 
+# The "Up Convert" setting is the Screen Mode of the menu (0 Off, 1 Normal, 2 Full Screen). It lives in byte +0x28 of the settings object
+# at 0xb46100, which the emulator fills from a block sent by the host: `lbz r0,0x2284(r29)` then `stb r0,0x28(r28)` (0x11ad18, 0x11ad1c).
+UP_CONVERT_VA, UP_CONVERT_STOCK = 0x11AD18, 0x881D2284
+
+
+def up_convert_edits(mode: int) -> tuple[Edit, ...]:
+    """EXPERIMENT: the settings copy stores `mode` as the Up Convert value instead of the byte the host sent (li r0,mode).
+
+    The video start-up reads that byte once, so this tells whether Full Screen (2) is applied at the start of a game.
+    """
+    if mode not in (0, 1, 2):
+        raise ValueError("the Up Convert value is 0 (Off), 1 (Normal) or 2 (Full Screen)")
+    return (word(UP_CONVERT_VA, UP_CONVERT_STOCK, 0x38000000 | mode, f"settings copy: Up Convert = {mode}"),)
+
+
 def defname_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: a NULL card name for slot 0 becomes "PS2" (cave_defname), so the game always gets a card in slot 1."""
     return cave_edits(cave_defname.build(CARD_CAVE_VA)[0])
@@ -333,6 +348,8 @@ if __name__ == "__main__":
         chosen = crop_edits() + bufcard_edits()
     if "--wide" in sys.argv:
         chosen = chosen + wide_edits()
+    if any(a.startswith("--up-convert=") for a in sys.argv):
+        chosen = chosen + up_convert_edits(int(next(a.split("=")[1] for a in sys.argv if a.startswith("--up-convert="))))
     if not any(a in sys.argv for a in ("--keep-filter", "--crop-only", "--probe", "--probe-select")):
         chosen = chosen + nofilter_edits()
     if not any(a in sys.argv for a in ("--keep-dither", "--crop-only", "--probe", "--probe-select")):
