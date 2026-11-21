@@ -16,7 +16,7 @@ Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VI
 | Installer creating the missing cards from the ISOs | The Dragon Quest VIII card appeared on the console right after the package ran (not made by `tools/make_cards.py`); a run of the app with a brand new ISO is the check still to do |
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
 | Menu value "Normal" keeps its stock name | In `v2.07` (v2.05 and v2.06 renamed it to `4:3`; `--labels` still does) |
-| **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. |
+| **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. The Screen Mode is the Up Convert byte, which is read once at video start-up, so a SELECT + R1 + L1 toggle is not a byte flip. |
 | No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
 | No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
 | Radiata Stories (US) experience points through webMAN | Fixed in `v2.09`, speed in `v2.10`: the app writes a CONFIG with the unpack hook and only the safe loop edit beside the ISO (see "Radiata Stories" below). Played on a console |
@@ -45,6 +45,47 @@ game starts, so nothing could be measured live):
 
 A patch that guesses the aspect call could keep PS2 games from starting, so none is shipped. The way forward needs console
 experiments (a build per hypothesis, checked on the TV).
+
+### Screen Mode is the "Up Convert" setting
+
+The emulator has a debug overlay (`0x26d6bc` to `0x26d9d4`) that prints named settings: `Boot Type`, `Region Type`, `Lang Type`, `Color Space`,
+`Video Mode`, `Display Type`, `Sound Type`, `Up Convert`, `Initial Up Convert` and `RGB Output Range`. "Up Convert" is the Screen Mode of the menu.
+Found by static analysis only; nothing here was measured on a console.
+
+* The settings object is at `0xb46100` (zero-filled data, filled at run time). 25 TOC slots point at it, among them `-0x36b0`, `-0x2ef8`
+  and `-0x79a8`. Up Convert is the byte at `+0x28` (getter `0x11ab30`), Initial Up Convert the byte at `+0x29` (getter `0x11b2c8`), RGB Output
+  Range the byte at `+0x2b` (getter `0x11b35c`). Every getter checks the initialised flag at `+0`.
+* The values are 0 Off, 1 Normal and 2 Full Screen. The decoder at `0x262978` turns the byte into `+0x10 = (value == 0)` and `+0x14 = (value == 2)`,
+  and the video start-up at `0x262ac4` stores `value == 2` at `+0x1c` of the display configuration at `0x306f380`.
+* The only store to `+0x28` is the bulk copy of a settings block sent by the host (`0x11ac64`; the byte comes from block offset `0x2284`, copied
+  by `lbz` at `0x11ad18` and `stb` at `0x11ad1c`). There is no setter.
+* The readers are the video start-up (`0x262a58`, which reads the value once and passes Initial Up Convert on to two methods of the display
+  object), the menu item states (`0x2784a4`, `0x2784e8`, `0x27c0a8`), the controller report builder (`0x120ee8`) and the overlay. No instruction in the
+  image reads the byte inline: all 25 TOC slots that point at the object were checked for `lbz ...,0x28(...)` through `0x2b`.
+
+What that means: nothing reads Up Convert while a frame is drawn, so a shortcut that only flips the byte at run time cannot change the picture.
+The stock emulator applies the Screen Mode when the video starts, and the host (the system software) handles a change made in the menu. A
+SELECT + R1 + L1 shortcut needs either a way to make the video start-up run again or to send the host the same request the menu sends. Neither was found.
+
+Other things learned on the way:
+
+* The output size is set by `0x117490` from a mode index (case 0 is 640x480, cases 4 and 5 are 1280x720, cases 6 to 9 are 1920x1080) and sent to
+  the host. The picture routine `0x282978` draws a quad over the whole output surface (viewport and scissor are `(0, 0, width, height)`), so where the
+  4:3 pillar bars come from is still unknown.
+* The DualShock 3 report parser is `0xe85a0`. Its input `r25` is the HID report (byte 2: SELECT, L3, R3, START and the d-pad; byte 3: L2, R2, L1, R1 and
+  the face buttons) and its output `r27` follows the `CellPadData` layout: halfwords `+4` and `+6` are the two digital bytes, `+8` to `+0xe` the sticks and
+  `+0x10` to `+0x26` the twelve pressure values. The generic path stores the digital halfwords at `0xe8714` and `0xe871c`; a button combination can be
+  read there (`r0` and `r9` are rewritten by the next instructions, the other registers were not checked). Not used yet.
+* The stock `ps2_netemu.self` can be rebuilt from `installer/payload/ps2_netemu_v2.bin`: unpack it, put back the stock words of the default edits
+  (`crop_edits`, `bufcard_edits`, `nofilter_edits`, `nodither_edits`), remove the `0x6c0` text extension from program header 0 and repack with the
+  payload as the container. The SHA-256 comes out as `bad3e45c...c80a`, so the file is the original.
+
+#### Experiment: force Full Screen at the start
+
+`python ps2_netemu_patch.py ps2_netemu.self out.self --up-convert=2` replaces the one `lbz` at `0x11ad18` with `li r0,2`, so the settings copy stores
+Full Screen whatever the host sent (`--up-convert=1` stores Normal, `=0` Off). The build differs from the default one by exactly that word. It is not in the
+package. The question it answers on a console: does the picture fill the screen from the first frame of a game? If it does, the Screen Mode is applied
+when the video starts and a shortcut can only choose it for the next start. If it does not, the screen scaling is entirely on the host side.
 
 ## Radiata Stories: random experience through webMAN
 
@@ -169,6 +210,8 @@ Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufc
 * `--wide` (`cave_wide.py`): returns the video output width times 4/3. Meant for 16:9 games that squeeze the picture into the 4:3 frame
   (Dragon Quest VIII); on the console it gave a **black screen** (the getter is used for more than the picture rectangle), so it is
   not a way forward as it is. The 16:9 menu option is the open item (see Status).
+* `--up-convert=0|1|2` (`up_convert_edits`): the settings copy stores that Screen Mode (Off, Normal, Full Screen) instead of the byte the host sent.
+  See "Screen Mode is the Up Convert setting". Not checked on a console.
 
 ## Creating the cards without opening the app
 
