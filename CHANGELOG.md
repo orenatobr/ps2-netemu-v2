@@ -2,6 +2,12 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.11
+- Test build, not a finished feature. The emulator image stores Full Screen (2) as the "Up Convert" setting, the one behind the Screen Mode of the menu, whatever value the system sent when a game starts (`ps2_netemu_patch.py --up-convert=2`, one word at `0x11ad18`). Everything else is the image of v2.10.
+- What to check on the console: start a game and see whether the picture fills the screen from the first frame. If it does, the Screen Mode is applied when the video starts. If it does not, the screen scaling is entirely on the system side. Either answer decides how the SELECT + R1 + L1 shortcut can be built.
+- The shortcut itself is not in this build, and nothing here was checked on a console. The Screen Mode item of the menu is left as it was.
+- The app lists the v2.10 image among the earlier builds, so this package installs over v2.10 and the original can be restored with Triangle.
+
 ## v2.10
 - Radiata Stories through webMAN, speed: the CONFIG the app writes now also carries one of the three busy-wait loop edits of webMAN's CUSTOM entry, the one at 0x14205C, which sits far from the unpack function (0x124D94). The other two (0x125004 and 0x1250A4) stay out because they are the ones that made the experience wrong. The unpack hook is unchanged. A CONFIG written by v2.09 is upgraded and kept as `<iso>.CONFIG.bak`.
 - Played on a console: the experience is right and characters level up. Also tried and rejected: turning the instruction cache emulation off (`0x21 0`) gave speed but broke the experience again.
