@@ -5,7 +5,7 @@ replacements at virtual addresses plus byte replacements in the data segment; ev
 the original bytes first and refuses to touch anything else.
 
 Usage:
-    python ps2_netemu_patch.py INPUT.self OUTPUT.self [--experiment] [--up-convert=0|1|2]
+    python ps2_netemu_patch.py INPUT.self OUTPUT.self [--experiment] [--up-convert=0|1|2] [--hotkey]
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ import cave_cardfile
 import cave_cardname
 import cave_crop
 import cave_defname
+import cave_hotkey
 import cave_nodither
 import cave_probe
 import cave_serial
@@ -40,6 +41,7 @@ CARD_CAVE_VA = CAVE_VA + 0xA0  # the crop cave uses the first 0x98 bytes
 SERIAL_CAVE_VA = CAVE_VA + 0x200  # the serial capture (528 bytes); the card cave of the serial plan sits at CARD_CAVE_VA
 PATH_VA = CAVE_VA + 0x440  # 64 bytes: the card path of the disc, empty when none
 NODITHER_CAVE_VA = CAVE_VA + 0x5C0  # after the buffer card cave (it ends at +0x5a0), 0x34 bytes
+HOTKEY_CAVE_VA = CAVE_VA + 0x5F8  # after the no dither cave (it ends at +0x5f4), before the wide cave
 SCRATCH_VA = 0x74E940  # writable: the unused tail of the last page of the data segment (made official by extend_data)
 SCRATCH_EXTRA = 0x100
 
@@ -235,6 +237,14 @@ def up_convert_edits(mode: int) -> tuple[Edit, ...]:
     return (word(UP_CONVERT_VA, UP_CONVERT_STOCK, 0x38000000 | mode, f"settings copy: Up Convert = {mode}"),)
 
 
+def hotkey_edits() -> tuple[Edit, ...]:
+    """EXPERIMENT: SELECT + L1 + R1 switches the live Screen Mode between Normal and Full Screen (cave_hotkey)."""
+    patches, used = cave_hotkey.build(HOTKEY_CAVE_VA)
+    if HOTKEY_CAVE_VA + used > WIDE_CAVE_VA:
+        raise ValueError("the hotkey cave does not fit before the wide cave")
+    return cave_edits(patches)
+
+
 def defname_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: a NULL card name for slot 0 becomes "PS2" (cave_defname), so the game always gets a card in slot 1."""
     return cave_edits(cave_defname.build(CARD_CAVE_VA)[0])
@@ -348,6 +358,8 @@ if __name__ == "__main__":
         chosen = crop_edits() + bufcard_edits()
     if "--wide" in sys.argv:
         chosen = chosen + wide_edits()
+    if "--hotkey" in sys.argv:
+        chosen = chosen + hotkey_edits()
     if any(a.startswith("--up-convert=") for a in sys.argv):
         chosen = chosen + up_convert_edits(int(next(a.split("=")[1] for a in sys.argv if a.startswith("--up-convert="))))
     if not any(a in sys.argv for a in ("--keep-filter", "--crop-only", "--probe", "--probe-select")):
