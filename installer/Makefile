@@ -124,6 +124,9 @@ $(OUTPUT).elf:	$(OFILES)
 
 -include $(DEPENDS)
 
+# the version and the payload hash are compiled in with -D flags, so a change of either must rebuild every object
+$(OFILES): $(CURDIR)/../../VERSION $(CURDIR)/../payload/ps2_netemu_v2.bin
+
 #---------------------------------------------------------------------------------
 endif
 #---------------------------------------------------------------------------------

@@ -2,6 +2,11 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.13
+- The app showed "v2.10" in its title and in "Patched (v...)" on the v2.11 and v2.12 packages. The installer objects are built with the version and the payload hash as compiler flags, and the Makefile did not rebuild them when `VERSION` or the payload changed, so old objects were reused. Every object now depends on both files.
+- The emulator image is the one of v2.12 (SELECT + L1 + R1 switches Normal and Full Screen). Confirmed on a console: the shortcut works.
+- Still open: after going back to Normal from Full Screen, the side bars show a frozen copy of the Full Screen picture instead of black. Not fixed in this release.
+
 ## v2.12
 - Test build of the shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen. The emulator image hooks the DualShock 3 report parser (`0xe8720`) and flips the live Screen Mode word (`0x3172f70`) once per press (`ps2_netemu_patch.py --hotkey`). Everything else is the image of v2.10, so the Screen Mode starts as the system sets it.
 - Not known: the video thread recalculates the Full Screen flag when the system raises an event, and nothing in this build raises it. The picture may change only at the next video mode change of the game, or not at all. Nothing was checked on a console. Please report what you see right after pressing the combination, and after the game changes its video mode.
