@@ -7,9 +7,9 @@ The hook at 0xe8720 replaces `lbz r9,8(r25)` by a jump here; the cave runs that 
 When the three buttons are held it reads the one byte of state at STATE_VA. A zero means the combination just started: the cave sets
 the byte and switches the mode, a one means it is still held and nothing happens. Any report without the combination clears the byte.
 
-Before it stores the new mode it copies the old one into the Up Convert byte of the settings object. The controller report builder (0x11ba80)
-sends the host the pair (settings byte, live mode) whenever the two differ, so each press tells the host "from X to Y". Without it the pair
-matched again after going back to Normal, the host heard nothing and the side bars kept a frozen picture (seen on a console in v2.12).
+After it stores the new mode it sets the request byte at +0xba of the frame object (TOC slot -0x3738, 0x306f2a8). The frame loop (0x4a0a8) sees it
+and marks the four picture buffers for a clear, which is what the host does with message 0x2d (0x131cc0, 0x133694). Without it the side bars kept the
+last Full Screen picture after going back to Normal (seen on a console in v2.12); opening and closing the menu cleared them.
 
 The mode is the global the display object reads through its `+0x88` method (TOC slot -0x2df0, address 0x3172f70). The video thread
 recalculates the Full Screen flag from it on its next event. Nothing here wakes that thread, and none of it was checked on a console.
@@ -25,7 +25,7 @@ HOOK_VA, HOOK_STOCK = 0xE8720, 0x89390008  # lbz r9,8(r25)
 RESUME = 0xE8724
 MODE_SLOT = -0x2DF0  # TOC slot holding the address of the live Screen Mode word (0x3172f70)
 STATE_VA = 0x3175470  # one byte in the zero filled tail of the data (the segment ends at 0x3175478), no other code refers to it
-SETTINGS_SLOT, UP_CONVERT = -0x2D80, 0x28  # TOC slot of the settings object (0xb46100) and its Up Convert byte
+FRAME_SLOT, CLEAR_REQUEST = -0x3738, 0xBA  # TOC slot of the frame object (0x306f2a8) and its "clear the four buffers" request byte
 SELECT, L1_R1 = 0x01, 0x0C  # bits of the first and the second digital byte
 NORMAL, FULL = 1, 2
 
@@ -38,10 +38,11 @@ def program() -> list[tuple]:
         ("lbz", "r5", 0, "r4"), ("cmpwi", "r5", 0), ("bne", "out"),  # still held
         ("li", "r5", 1), ("stb", "r5", 0, "r4"),
         ("ld", "r4", MODE_SLOT, "r2"), ("lwz", "r5", 0, "r4"),
-        ("ld", "r3", SETTINGS_SLOT, "r2"), ("stb", "r5", UP_CONVERT, "r3"),  # the settings byte keeps the mode being left
         ("cmpwi", "r5", FULL),
         ("li", "r5", FULL), ("bne", "store"), ("li", "r5", NORMAL),
-        ("label", "store"), ("stw", "r5", 0, "r4"), ("b", "out"),
+        ("label", "store"), ("stw", "r5", 0, "r4"),
+        ("ld", "r3", FRAME_SLOT, "r2"), ("li", "r5", 1), ("stb", "r5", CLEAR_REQUEST, "r3"),  # ask the frame loop to clear the four buffers
+        ("b", "out"),
         ("label", "release"),
         ("lis", "r4", STATE_VA >> 16), ("ori", "r4", "r4", STATE_VA & 0xFFFF), ("li", "r5", 0), ("stb", "r5", 0, "r4"),
         ("label", "out"),
