@@ -36,3 +36,21 @@ tools/lv1-usb-poke.sh revert <ps3-ip>
 The script reads each word first and refuses to write if it is not the expected original
 (`4bfffa5d`, `90090000`), so it stops on any other firmware. Skipping the teardown may leave the
 port in a bad state or hang the console: reboot the PS3 to undo it.
+
+## Verdict (2026-11-22)
+Closed as a platform limitation, not a patchable bug in this project or in the Evilnat CFW.
+
+- Two lv1 candidates were refuted on hardware (port teardown at 0x23d94c and 0x23d97c, host
+  controller reset at 0x23dd4c). The stock emulator and the PS2 Classics path behave the same
+  on the same console.
+- Public reports describe the same behavior on original hardware: the pad turns off when a PS2
+  game starts and the PS button brings it back (Push Square and GameSpot forums for PS2 discs,
+  GameFAQs and PlayStationTrophies for PS2 Classics).
+- The Evilnat Cobra source (8.5/4.93 CEX) only hooks disc and ISO access in the PS2 emulator
+  stage. It has no pad, USB or Bluetooth code to change.
+- The LPAR unload and vuart teardown strings in lv1 have no PPC code references in a 16 MB
+  dump, so that logic is likely outside the lv1 text (unconfirmed).
+- Not tried: patching `0x23d3a8` (common port-mode helper), and any dynamic trace of lv1 or the
+  guest during the switch.
+
+Workaround: press the PS button after entering and after leaving PS2 mode.
