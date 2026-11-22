@@ -98,12 +98,29 @@ def test_the_state_byte_is_inside_the_data_the_segment_maps():
     assert 0x3172FFC < H.STATE_VA < 0x3175478
 
 
-def test_the_settings_byte_keeps_the_mode_being_left(patched):
-    """The report builder sends (settings byte, live mode) when they differ, so the host hears 'from X to Y' in both directions."""
-    for mode, new in ((1, 2), (2, 1)):
+def test_a_press_asks_for_the_four_buffers_to_be_cleared(patched):
+    """The frame loop (0x4a0a8) clears the four picture buffers when the byte at +0xba of the frame object is set, as the host does with message 0x2d."""
+    request = 0x306F2A8 + 0xBA
+    for mode in (1, 2):
         cpu = Cpu(patched)
         cpu.r[2], cpu.r[25] = TOC, REPORT
         cpu.wr(MODE_ADDR, 4, mode)
+        assert cpu.byte(request) == 0
         cpu.r[0], cpu.r[9] = both(SELECT, L1, R1)
         cpu.run(H.HOOK_VA, {H.RESUME})
-        assert cpu.rd(MODE_ADDR, 4) == new and cpu.byte(0xB46100 + 0x28) == mode
+        assert cpu.byte(request) == 1
+
+
+def test_no_request_without_the_combination_or_while_held(patched):
+    request = 0x306F2A8 + 0xBA
+    cpu = Cpu(patched)
+    cpu.r[2], cpu.r[25] = TOC, REPORT
+    cpu.r[0], cpu.r[9] = both(SELECT, L1)
+    cpu.run(H.HOOK_VA, {H.RESUME})
+    assert cpu.byte(request) == 0
+    cpu = Cpu(patched)
+    cpu.r[2], cpu.r[25] = TOC, REPORT
+    cpu.wr(H.STATE_VA, 1, 1)
+    cpu.r[0], cpu.r[9] = both(SELECT, L1, R1)
+    cpu.run(H.HOOK_VA, {H.RESUME})
+    assert cpu.byte(request) == 0

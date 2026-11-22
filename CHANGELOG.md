@@ -2,6 +2,12 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.15
+- Test build for the side bars. A console test showed that opening and closing the emulator menu clears the frozen side bars after Full Screen and back to Normal. Reading the code found the request the host uses for this: the frame loop (`0x4a0a8`) checks the byte at `+0xba` of the frame object (`0x306f2a8`) and, when it is set, marks the four picture buffers for a clear (`0x4a1d4`). The host fills that byte with message `0x2d` (`0x131cc0`, `0x133694`). Each press of SELECT + L1 + R1 now sets it after it stores the new mode (`cave_hotkey.py`, 3 instructions).
+- The v2.14 write to the settings Up Convert byte is gone: the console showed it did nothing.
+- Not known: this rests on reading the code, not on a console yet. Please report whether the bars are black after Full Screen and back to Normal.
+- Pre-release. `latest` stays on v2.13.
+
 ## v2.14
 - Test build for the side bars: after Full Screen and back to Normal, v2.12 and v2.13 left a frozen copy of the Full Screen picture in the side bars. The controller report builder (`0x11ba80`) tells the host the pair (settings Up Convert byte, live Screen Mode) whenever they differ, and after going back to Normal the pair matched again, so the host was never told. Each press of SELECT + L1 + R1 now first copies the mode being left into the settings byte (`0xb46128`), so the host hears "from X to Y" in both directions (`cave_hotkey.py`, 2 more instructions).
 - Console result: it did not fix the bars. Opening and closing the emulator menu with the bars frozen does clear them, so the trigger is something the menu does when it opens or closes.
