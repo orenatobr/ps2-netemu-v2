@@ -96,3 +96,14 @@ def test_the_cave_fits_between_the_no_dither_and_the_wide_caves():
 
 def test_the_state_byte_is_inside_the_data_the_segment_maps():
     assert 0x3172FFC < H.STATE_VA < 0x3175478
+
+
+def test_the_settings_byte_keeps_the_mode_being_left(patched):
+    """The report builder sends (settings byte, live mode) when they differ, so the host hears 'from X to Y' in both directions."""
+    for mode, new in ((1, 2), (2, 1)):
+        cpu = Cpu(patched)
+        cpu.r[2], cpu.r[25] = TOC, REPORT
+        cpu.wr(MODE_ADDR, 4, mode)
+        cpu.r[0], cpu.r[9] = both(SELECT, L1, R1)
+        cpu.run(H.HOOK_VA, {H.RESUME})
+        assert cpu.rd(MODE_ADDR, 4) == new and cpu.byte(0xB46100 + 0x28) == mode
