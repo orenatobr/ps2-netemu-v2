@@ -1,6 +1,13 @@
 # Experiment: keep the controller on across the PS2 switch (lv1 poke)
 
-Status: **experimental, untested on hardware**. Evilnat CEX 4.93 only. Not a fix yet.
+Status: **tested on hardware, refuted**. Evilnat CEX 4.93 only. Not a fix.
+
+Result (2026-11-22): with both words patched (confirmed by a live peek) the DualShock 3 still
+turned off when entering PS2 mode. The port teardown at 0x23d830 is not what cuts the pad.
+Not yet ruled out: the sibling port routines (0x23d4c4, 0x23d644, hypercall family 170 to 198),
+and a reset done by a guest (lv2 or `ps2_netemu`). The stock emulator and the PS2 Classic path
+behave the same, so the loss looks inherent to the partition switch. Workaround: press the PS
+button after entering and after leaving PS2 mode.
 
 ## Why
 Entering and leaving PS2 mode swaps the GameOS partition for the PS2 LPAR in lv1, and the
@@ -13,7 +20,7 @@ has no pad power-off code, so the cause is below this repository.
 - 0x23d830 zeroes the state of 6 ports through 0x23d3a8 (call at 0x23d94c) and writes 0 to the
   controller register +0xf00 (store at 0x23d97c). The owner's virtual method (0x2294d4) only
   releases software resources.
-- Theory: that port teardown power-cycles the Bluetooth dongle. Unproven.
+- Theory: that port teardown power-cycles the Bluetooth dongle. Refuted by the test above.
 
 ## How the dump was taken
 1. `http://<ps3>/dump.ps3?lv1` (webMAN MOD) writes `/dev_hdd0/dump_lv1.bin` (16 MB, read only).
