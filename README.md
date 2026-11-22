@@ -16,7 +16,7 @@ Release `v2.13`. Checked on the console with the Grandia III and Dragon Quest VI
 | Installer creating the missing cards from the ISOs | The Dragon Quest VIII card appeared on the console right after the package ran (not made by `tools/make_cards.py`); a run of the app with a brand new ISO is the check still to do |
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
 | Menu value "Normal" keeps its stock name | In `v2.07` (v2.05 and v2.06 renamed it to `4:3`; `--labels` still does) |
-| **Shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen** | In `v2.12` and later, DualShock 3 only. Works on the console (the picture changes at once). **Open glitch:** going back to Normal leaves the side bars with a frozen copy of the Full Screen picture instead of black; the menu does not do that. See "The live Screen Mode and the shortcut" below. |
+| **Shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen** | In `v2.12` and later, DualShock 3 only. Works on the console (the picture changes at once). **Open glitch:** going back to Normal leaves the side bars with a frozen copy of the Full Screen picture instead of black. Workaround, checked on the console: open the emulator menu and close it, and the bars turn black. See "The live Screen Mode and the shortcut" below. |
 | 16:9 option in that menu (full screen stretch) | Not implemented as a menu item, see "16:9: what was found" below |
 | No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
 | No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
@@ -93,10 +93,7 @@ held it switches that word between 1 and 2 once per press (one byte of state at 
 the video thread; on the console the picture changes at once anyway, so the system raises the event often enough. Only the generic report path is hooked
 (the DualShock 3 and similar); the two device types that branch earlier are not.
 
-Open glitch (seen on the console in `v2.12`): after Full Screen and back to Normal the side bars keep a frozen copy of the Full Screen picture. Setting
-Normal from the menu is clean, and the menu writes the same word (the two-option widget at `0x27831c` calls method `+0x90`), so something around the
-menu (the game is paused and redrawn) clears the bars and the shortcut does not. The picture routine `0x282978` clears only when a stack flag is set and
-its viewport covers the whole surface, so the bars are left by the composition layer (`0x276008`, the type routines at `0x2677b8`). Not solved.
+Open glitch (seen on the console in `v2.12` and `v2.14`): after Full Screen and back to Normal the side bars keep a frozen copy of the Full Screen picture. Workaround, checked on the console: open the emulator menu and close it, and the bars turn black. Setting Normal from the menu is clean, and the menu writes the same word (the two-option widget at `0x27831c` calls method `+0x90`; the setters at `0x27aed0` and `0x27aee8` only store the word). Telling the host the mode being left (the `v2.14` test build, which writes the settings Up Convert byte) did not help. What clears the bars is something the menu does when it opens or closes (the game is paused and redrawn). The picture routine `0x282978` clears only when a flag is set, and the flag comes from the frame loop (`0x49dc0`, `0x4a330`). Which flag the menu raises is not known yet.
 
 #### Experiment: force Full Screen at the start
 

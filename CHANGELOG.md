@@ -4,13 +4,13 @@ Every release lists what changed here, newest first. The section of a version is
 
 ## v2.14
 - Test build for the side bars: after Full Screen and back to Normal, v2.12 and v2.13 left a frozen copy of the Full Screen picture in the side bars. The controller report builder (`0x11ba80`) tells the host the pair (settings Up Convert byte, live Screen Mode) whenever they differ, and after going back to Normal the pair matched again, so the host was never told. Each press of SELECT + L1 + R1 now first copies the mode being left into the settings byte (`0xb46128`), so the host hears "from X to Y" in both directions (`cave_hotkey.py`, 2 more instructions).
-- Not known: this rests on reading the code, not on a console. Please report whether the bars are black after going back to Normal. If they are not, the host redraw has another trigger and the next test is what the in-game menu does.
+- Console result: it did not fix the bars. Opening and closing the emulator menu with the bars frozen does clear them, so the trigger is something the menu does when it opens or closes.
 - Pre-release. `latest` stays on v2.13.
 
 ## v2.13
 - The app showed "v2.10" in its title and in "Patched (v...)" on the v2.11 and v2.12 packages. The installer objects are built with the version and the payload hash as compiler flags, and the Makefile did not rebuild them when `VERSION` or the payload changed, so old objects were reused. Every object now depends on both files.
 - The emulator image is the one of v2.12 (SELECT + L1 + R1 switches Normal and Full Screen). Confirmed on a console: the shortcut works.
-- Still open: after going back to Normal from Full Screen, the side bars show a frozen copy of the Full Screen picture instead of black. Not fixed in this release.
+- Still open: after going back to Normal from Full Screen, the side bars show a frozen copy of the Full Screen picture instead of black. Not fixed in this release. Workaround, checked on a console: open the emulator menu and close it, and the bars turn black.
 
 ## v2.12
 - Test build of the shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen. The emulator image hooks the DualShock 3 report parser (`0xe8720`) and flips the live Screen Mode word (`0x3172f70`) once per press (`ps2_netemu_patch.py --hotkey`). Everything else is the image of v2.10, so the Screen Mode starts as the system sets it.
