@@ -6,7 +6,7 @@ what changed in each release).
 
 ## Status
 
-Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs. `v2.11` is a test build that forces Full Screen at the start of a game (see CHANGELOG.md).
+Release `v2.13`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs. The Screen Mode shortcut (SELECT + L1 + R1) was checked on the console in `v2.12`; one glitch is open (see the table).
 
 | Feature | State |
 |---|---|
@@ -16,7 +16,8 @@ Release `v2.09`. Checked on the console with the Grandia III and Dragon Quest VI
 | Installer creating the missing cards from the ISOs | The Dragon Quest VIII card appeared on the console right after the package ran (not made by `tools/make_cards.py`); a run of the app with a brand new ISO is the check still to do |
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
 | Menu value "Normal" keeps its stock name | In `v2.07` (v2.05 and v2.06 renamed it to `4:3`; `--labels` still does) |
-| **16:9 option in that menu (full screen stretch)** | **Not implemented**, see "16:9: what was found" below. The Screen Mode is the Up Convert byte, which is read once at video start-up, so a SELECT + R1 + L1 toggle is not a byte flip. |
+| **Shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen** | In `v2.12` and later, DualShock 3 only. Works on the console (the picture changes at once). **Open glitch:** going back to Normal leaves the side bars with a frozen copy of the Full Screen picture instead of black; the menu does not do that. See "The live Screen Mode and the shortcut" below. |
+| 16:9 option in that menu (full screen stretch) | Not implemented as a menu item, see "16:9: what was found" below |
 | No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
 | No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
 | Radiata Stories (US) experience points through webMAN | Fixed in `v2.09`, speed in `v2.10`: the app writes a CONFIG with the unpack hook and only the safe loop edit beside the ISO (see "Radiata Stories" below). Played on a console |
@@ -63,9 +64,8 @@ Found by static analysis only; nothing here was measured on a console.
   object), the menu item states (`0x2784a4`, `0x2784e8`, `0x27c0a8`), the controller report builder (`0x120ee8`) and the overlay. No instruction in the
   image reads the byte inline: all 25 TOC slots that point at the object were checked for `lbz ...,0x28(...)` through `0x2b`.
 
-What that means: nothing reads Up Convert while a frame is drawn, so a shortcut that only flips the byte at run time cannot change the picture.
-The stock emulator applies the Screen Mode when the video starts, and the host (the system software) handles a change made in the menu. A
-SELECT + R1 + L1 shortcut needs either a way to make the video start-up run again or to send the host the same request the menu sends. Neither was found.
+What that means: nothing reads Up Convert while a frame is drawn, so flipping this byte at run time cannot change the picture. The shortcut
+flips the live Screen Mode word instead (next section).
 
 Other things learned on the way:
 
@@ -80,7 +80,7 @@ Other things learned on the way:
   (`crop_edits`, `bufcard_edits`, `nofilter_edits`, `nodither_edits`), remove the `0x6c0` text extension from program header 0 and repack with the
   payload as the container. The SHA-256 comes out as `bad3e45c...c80a`, so the file is the original.
 
-#### The live Screen Mode and the shortcut experiment
+#### The live Screen Mode and the shortcut
 
 The value that changes while a game runs is not the `+0x28` byte. The video thread (`0x262a58`, loop at `0x262d00`) waits on an event group and, when
 bit `0x00800000` comes back, asks the display object (`0x30700d0`) for the mode through its method at `+0x88` and stores `mode == 2` as the Full Screen
@@ -90,8 +90,13 @@ Initial Up Convert in it. No code of the emulator sets the event bit; it comes f
 
 `python ps2_netemu_patch.py ps2_netemu.self out.self --hotkey` (`cave_hotkey.py`) hooks the DualShock 3 parser at `0xe8720`. While SELECT, L1 and R1 are
 held it switches that word between 1 and 2 once per press (one byte of state at `0x3175470`, in the zero filled tail of the data). It does not wake
-the video thread, so the picture changes only when the thread next recalculates (for example when the game changes its video mode), and it is not known
-whether that is enough. Only the generic report path is hooked (the DualShock 3 and similar); the two device types that branch earlier are not. Not checked on a console.
+the video thread; on the console the picture changes at once anyway, so the system raises the event often enough. Only the generic report path is hooked
+(the DualShock 3 and similar); the two device types that branch earlier are not.
+
+Open glitch (seen on the console in `v2.12`): after Full Screen and back to Normal the side bars keep a frozen copy of the Full Screen picture. Setting
+Normal from the menu is clean, and the menu writes the same word (the two-option widget at `0x27831c` calls method `+0x90`), so something around the
+menu (the game is paused and redrawn) clears the bars and the shortcut does not. The picture routine `0x282978` clears only when a stack flag is set and
+its viewport covers the whole surface, so the bars are left by the composition layer (`0x276008`, the type routines at `0x2677b8`). Not solved.
 
 #### Experiment: force Full Screen at the start
 
@@ -223,8 +228,8 @@ Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufc
 * `--wide` (`cave_wide.py`): returns the video output width times 4/3. Meant for 16:9 games that squeeze the picture into the 4:3 frame
   (Dragon Quest VIII); on the console it gave a **black screen** (the getter is used for more than the picture rectangle), so it is
   not a way forward as it is. The 16:9 menu option is the open item (see Status).
-* `--hotkey` (`cave_hotkey.py`): SELECT + L1 + R1 switches the live Screen Mode word between Normal and Full Screen. See "The live Screen Mode and
-  the shortcut experiment". Not checked on a console.
+* `--hotkey` (`cave_hotkey.py`): SELECT + L1 + R1 switches the live Screen Mode word between Normal and Full Screen. In the package since `v2.12`. See "The live Screen Mode and
+  the shortcut".
 * `--up-convert=0|1|2` (`up_convert_edits`): the settings copy stores that Screen Mode (Off, Normal, Full Screen) instead of the byte the host sent.
   See "Screen Mode is the Up Convert setting". Not checked on a console.
 
