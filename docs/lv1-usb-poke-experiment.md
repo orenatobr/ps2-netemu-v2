@@ -40,8 +40,9 @@ port in a bad state or hang the console: reboot the PS3 to undo it.
 ## Verdict (2026-11-22)
 Closed as a platform limitation, not a patchable bug in this project or in the Evilnat CFW.
 
-- Two lv1 candidates were refuted on hardware (port teardown at 0x23d94c and 0x23d97c, host
-  controller reset at 0x23dd4c). The stock emulator and the PS2 Classics path behave the same
+- Three candidates were refuted on hardware: lv1 port teardown (0x23d94c and 0x23d97c), lv1 host
+  controller reset (0x23dd4c), and lv2 usbd `request_port_power_off` (0x23c220, patched to return
+  at once). In each case the pad still turned off. The stock emulator and the PS2 Classics path behave the same
   on the same console.
 - Public reports describe the same behavior on original hardware: the pad turns off when a PS2
   game starts and the PS button brings it back (Push Square and GameSpot forums for PS2 discs,
