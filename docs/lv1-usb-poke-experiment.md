@@ -55,3 +55,25 @@ Closed as a platform limitation, not a patchable bug in this project or in the E
   guest during the switch.
 
 Workaround: press the PS button after entering and after leaving PS2 mode.
+
+## Feasibility of keeping the pad on across the switch (static study, 2026-11-22)
+Studied: the Evilnat 4.93 `lv2_kernel.self` (decrypted from the PUP, checked against the live lv2 by
+peek), the console `vsh.self` (read over FTP, decrypted), and the stock `ps2_netemu.self`.
+
+- **Entry (GameOS to PS2 emulator).** `ps2_netemu` carries its own copy of the system pad stack
+  (`HidUsb`, `usbd pipe chain`, `_sys_hid_core_thread`, `HidGamepadMgr`, `pairing_manager`,
+  `pad_manager`, `authentication_manager`, `BT_*` keys) and maps its own `ehci_mmio` and `ohci_mmio`
+  windows (hypercalls 170, 172 and 174 in the function at `0x19c80`). It is a new guest with a new
+  Bluetooth stack, so it cannot inherit the link state (channels, keys in use) that lived in the
+  GameOS memory. No standard HCI command table (Reset, Set Event Mask, Write Scan Enable) exists in
+  its data, and lv2 talks to the radio with vendor calls (`bt_port_control`, `bt_inquiry_start`,
+  `bt_send_passkey`), so the reset cannot be located and skipped by pattern.
+- **Exit (emulator to GameOS).** lv2 boots from scratch and its `usbd` and Bluetooth drivers
+  initialize the radio again. A CFW can patch lv2 statically, but there is no known instruction that
+  only "resets the pad link": it is the normal bring-up of the stack.
+- **Reconnecting without the PS button.** The DualShock 3 connects to the console, not the other
+  way around, and the pairing keys (`/setting/bt/controllerN/linkkey` in the system registry) do not
+  let the host wake it.
+- **Tested and refuted:** lv1 port teardown, lv1 host controller reset, lv2 `request_port_power_off`.
+- **Not tried:** a `ps2_netemu` that does not touch USB at all (decisive for the entry side, needs a
+  console test), the lv1 helper at `0x23d3a8`, and a dynamic trace of lv1 during the switch.
