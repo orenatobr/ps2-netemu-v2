@@ -102,6 +102,17 @@ Full Screen whatever the host sent (`--up-convert=1` stores Normal, `=0` Off). T
 package. The question it answers on a console: does the picture fill the screen from the first frame of a game? If it does, the Screen Mode is applied
 when the video starts and a shortcut can only choose it for the next start. If it does not, the screen scaling is entirely on the host side.
 
+## The controller turns off when entering and leaving the emulator (not fixed)
+
+Reported: with a DualShock 3 (assumed Bluetooth), the pad turns off when a PS2 game starts and again when the emulator closes. Nothing here fixes it; this is what static analysis of the stock image found (nothing measured on a console).
+
+* The image is its own small system, not a process of the normal firmware: its system calls are numbers 0 to 249, it has its own USB stack (`ehci_mmio`, `ohci_mmio`, `HidUsb`, `usbpad`) and its own pad objects (`pad_manager`, `pairing_manager`, `_sys_hid_core_thread`, `HidGamepadMgr`). It makes only 21 hypercalls (numbers `0xa2` and `0xff`), none of which looks like Bluetooth.
+* Entering and leaving the emulator swaps the whole kernel (the normal firmware stops, this image starts, later the firmware starts again). Each new kernel brings up its own Bluetooth stack, so the pad loses its link and powers itself off. This is an inference from how the console behaves, not something read in the code.
+* The entering half belongs to the firmware (CFW) that runs before this image, which is outside this repository. The leaving half would need this image to keep the radio and the pad link as they are and for the next kernel to adopt them, which needs L2CAP channel state this analysis did not find.
+* Not found: any explicit "power off the pad" call on start or exit in this image (the menu text "Turn Off the Controller" is only a string of the in-game menu). Bluetooth setting names (`AUTO_PAGE_SCAN_ACTIVITY`, `AUTO_PAGE_SCAN_TYPE`, `kgbt`) sit in a data table at `0x937000`; no code that uses it was located.
+
+What would move this forward: a console test with a wired (USB) pad to see whether the problem is only Bluetooth, and a look at the firmware side (for example a CFW lv2 patch) rather than at `ps2_netemu`.
+
 ## Radiata Stories: random experience through webMAN
 
 A PS2 Classics package runs the game with the official CONFIG; an ISO mounted by webMAN runs with `<iso>.CONFIG`, which webMAN fills on the first
