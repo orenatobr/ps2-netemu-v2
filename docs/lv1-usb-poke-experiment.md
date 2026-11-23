@@ -77,3 +77,24 @@ peek), the console `vsh.self` (read over FTP, decrypted), and the stock `ps2_net
 - **Tested and refuted:** lv1 port teardown, lv1 host controller reset, lv2 `request_port_power_off`.
 - **Not tried:** a `ps2_netemu` that does not touch USB at all (decisive for the entry side, needs a
   console test), the lv1 helper at `0x23d3a8`, and a dynamic trace of lv1 during the switch.
+
+## Console state and restore procedure (diagnostic build)
+
+Test files used on the Evilnat 4.93 CEX console (SHA-256):
+
+| File | SHA-256 | Purpose |
+|------|---------|---------|
+| stock `ps2_netemu.self` | `bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a` | original, backed up by the installer at `/dev_hdd0/ps2_netemu_stock.self` |
+| v2.15 patched build | `ea8b64fba410aa4fd87812047caf4216ef52b098ac3266d32371ebd280fcb968` | what the installer writes |
+| `nousb.self` (diagnostic) | `c413f4d5df93367df312dd738362fe62b43efb581dabec0bbe038cba96acdbc1` | returns 0 at the USB open function (0x19c80); pad may not work in-game |
+
+Restore the installed build or the stock one:
+
+```
+curl -s http://<ps3>/dev_blind -o /dev/null
+curl -s -Q "DELE /dev_blind/ps2emu/ps2_netemu.self" ftp://<ps3>/ -o /dev/null
+curl -s -T <file> ftp://<ps3>/dev_blind/ps2emu/ps2_netemu.self
+```
+
+Then check that the SHA-256 of the file read back over FTP matches the table.
+The `nousb.self` result (pad lit or not on PS2 entry) is still unrecorded.
