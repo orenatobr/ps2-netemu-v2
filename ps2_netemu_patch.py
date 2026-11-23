@@ -5,7 +5,7 @@ replacements at virtual addresses plus byte replacements in the data segment; ev
 the original bytes first and refuses to touch anything else.
 
 Usage:
-    python ps2_netemu_patch.py INPUT.self OUTPUT.self [--experiment] [--up-convert=0|1|2] [--hotkey]
+    python ps2_netemu_patch.py INPUT.self OUTPUT.self [--experiment] [--up-convert=0|1|2] [--hotkey] [--start-fullscreen]
 """
 from __future__ import annotations
 
@@ -237,6 +237,21 @@ def up_convert_edits(mode: int) -> tuple[Edit, ...]:
     return (word(UP_CONVERT_VA, UP_CONVERT_STOCK, 0x38000000 | mode, f"settings copy: Up Convert = {mode}"),)
 
 
+# The video start-up (0x262a58) reads the Up Convert byte (0x262ac4, kept in r29 by `mr r29,r3` at 0x262acc) and stores `value == 2` as the Full Screen
+# flag of the display configuration, then hands the Initial Up Convert byte to the display object's method +0x90 (0x262b70, `clrldi r4,r3,0x38` at 0x262b78),
+# which writes the live Screen Mode word (0x3172f70, the one SELECT + L1 + R1 flips). Initial Up Convert (+0x29) is never stored, so the live mode starts as 0.
+START_FLAG_VA, START_FLAG_STOCK = 0x262ACC, 0x7C7D1B78  # mr r29,r3
+START_LIVE_VA, START_LIVE_STOCK = 0x262B78, 0x78640620  # clrldi r4,r3,0x38
+
+
+def start_fullscreen_edits() -> tuple[Edit, ...]:
+    """The emulator starts in Full Screen whatever Screen Mode the system sent: the start-up flag and the live Screen Mode word both start as 2."""
+    return (
+        word(START_FLAG_VA, START_FLAG_STOCK, 0x3BA00002, "video start-up: Up Convert = 2 (li r29,2)"),
+        word(START_LIVE_VA, START_LIVE_STOCK, 0x38800002, "video start-up: the live Screen Mode starts as 2 (li r4,2)"),
+    )
+
+
 def hotkey_edits() -> tuple[Edit, ...]:
     """EXPERIMENT: SELECT + L1 + R1 switches the live Screen Mode between Normal and Full Screen (cave_hotkey)."""
     patches, used = cave_hotkey.build(HOTKEY_CAVE_VA)
@@ -360,6 +375,8 @@ if __name__ == "__main__":
         chosen = chosen + wide_edits()
     if "--hotkey" in sys.argv:
         chosen = chosen + hotkey_edits()
+    if "--start-fullscreen" in sys.argv:
+        chosen = chosen + start_fullscreen_edits()
     if any(a.startswith("--up-convert=") for a in sys.argv):
         chosen = chosen + up_convert_edits(int(next(a.split("=")[1] for a in sys.argv if a.startswith("--up-convert="))))
     if not any(a in sys.argv for a in ("--keep-filter", "--crop-only", "--probe", "--probe-select")):
