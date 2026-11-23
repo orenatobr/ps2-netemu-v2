@@ -97,4 +97,4 @@ curl -s -T <file> ftp://<ps3>/dev_blind/ps2emu/ps2_netemu.self
 ```
 
 Then check that the SHA-256 of the file read back over FTP matches the table.
-The `nousb.self` result (pad lit or not on PS2 entry) is still unrecorded.
+Result of `nousb.self`: the pad turned off and the console crashed on PS2 entry. The v2.15 build was restored and verified by hash (`ea8b64fb...`). Investigation closed, `latest` stays v2.15.
