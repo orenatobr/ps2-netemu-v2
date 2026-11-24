@@ -89,6 +89,8 @@ class Cpu:
                 self.r[rt] = (self.ra0(ra) + (_s16(w & 0xFFFF) << 16)) & M64
             elif op == 24:  # ori (RA is the destination)
                 self.r[ra] = self.r[rt] | (w & 0xFFFF)
+            elif op == 26:  # xori (RA is the destination)
+                self.r[ra] = self.r[rt] ^ (w & 0xFFFF)
             elif op == 62 and w & 3 in (0, 1):  # std / stdu
                 ea = ((self.ra0(ra) if w & 3 == 0 else self.r[ra]) + _s16(w & 0xFFFC)) & M64
                 self.wr(ea, 8, self.r[rt])
@@ -187,10 +189,10 @@ class Cpu:
             elif op == 11:  # cmpwi / cmpdi (L bit)
                 a, b = (_s64(self.r[ra]) if (w >> 21) & 1 else _s32(self.r[ra])), _s16(w & 0xFFFF)
                 self.cr[(w >> 23) & 7] = (int(a < b), int(a > b), int(a == b))
-            elif op == 16:  # bc (only the two conditional forms used here)
+            elif op == 16:  # bc on one condition bit, no counter (BO 4 to 7 branch if clear, 12 to 15 if set; the low bits are prediction hints)
                 bo, bi = rt, ra
                 bit = self.cr[bi // 4][bi % 4]
-                taken = bit == 1 if bo == 12 else bit == 0 if bo == 4 else None
+                taken = bit == (1 if bo & 8 else 0) if bo & 0x14 == 0x04 else None
                 if taken is None:
                     raise NotImplementedError(f"{pc:#x}: bo {bo}")
                 if taken:

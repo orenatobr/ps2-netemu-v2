@@ -34,6 +34,35 @@ def run_flag(elf: bytes, host_value: int) -> int:
     return cpu.r[29] & 0xFF
 
 
+TOC, STACK, SETTINGS, CONFIG, OTHER = 0x751280, 0x7200_0000, 0x7000_0000, 0x7100_0000, 0x7300_0000
+PATH_START, PATH_END = 0x262ABC, 0x262B30  # `ld r28,-0x36b0(r2)` .. just before the call to 0x262664
+FULL_FLAG = 0x1C  # offset of the Full Screen flag in the display configuration
+
+
+def run_start_up(elf: bytes, host_value: int) -> int:
+    """Run the real start-up path (the getters included) up to the call at 0x262b30; return the Full Screen flag it stored."""
+    cpu = Cpu(elf)
+    cpu.r[1], cpu.r[2] = STACK, TOC
+    cpu.wr(TOC - 0x36B0, 8, SETTINGS)  # TOC slots the code reads: settings object, display configuration, another object
+    cpu.wr(TOC - 0x36B8, 8, CONFIG)
+    cpu.wr(TOC - 0x3698, 8, OTHER)
+    cpu.mem[SETTINGS] = 1  # the "initialised" flag every getter checks
+    cpu.mem[SETTINGS + 0x28] = host_value
+    cpu.mem[SETTINGS + 0x2A] = 1
+    assert cpu.run(PATH_START, {PATH_END}) == PATH_END
+    return cpu.rd(CONFIG + FULL_FLAG, 4)
+
+
+@pytest.mark.parametrize("host_value", [1, 2])
+def test_stock_start_up_stores_full_screen_only_when_the_host_asked_for_it(stock_elf, host_value):
+    assert run_start_up(stock_elf, host_value) == (host_value == 2)
+
+
+@pytest.mark.parametrize("host_value", [1, 2])
+def test_patched_start_up_stores_full_screen_whatever_the_host_sent(stock_elf, host_value):
+    assert run_start_up(P.apply_edits(stock_elf, P.start_fullscreen_edits()), host_value) == 1
+
+
 def run_live(elf: bytes, initial_up_convert: int) -> int:
     """Run the one instruction that prepares the argument of the +0x90 setter; return r4."""
     cpu = Cpu(elf)
