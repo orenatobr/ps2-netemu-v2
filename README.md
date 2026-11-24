@@ -6,7 +6,7 @@ what changed in each release).
 
 ## Status
 
-Release `v2.15`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs. The Screen Mode shortcut (SELECT + L1 + R1) was checked on the console, including the side bars after going back to Normal (`v2.15`).
+Release `v2.16`. Checked on the console with the Grandia III and Dragon Quest VIII ISOs. The Screen Mode shortcut (SELECT + L1 + R1) was checked on the console, including the side bars after going back to Normal (`v2.15`).
 
 | Feature | State |
 |---|---|
@@ -17,6 +17,7 @@ Release `v2.15`. Checked on the console with the Grandia III and Dragon Quest VI
 | Installer works when webMAN already mounted `/dev_blind` | In `v2.05` (before, the app said "could not open the system files") |
 | Menu value "Normal" keeps its stock name | In `v2.07` (v2.05 and v2.06 renamed it to `4:3`; `--labels` still does) |
 | **Shortcut: hold SELECT + L1 + R1 in a game to switch the Screen Mode between Normal and Full Screen** | In `v2.12` and later, DualShock 3 only. Works on the console (the picture changes at once). Up to `v2.14` going back to Normal left a frozen copy of the Full Screen picture in the side bars; fixed in `v2.15`. See "The live Screen Mode and the shortcut" below. |
+| **The emulator starts in Full Screen** | In `v2.16`, whatever Screen Mode the system sent. Two words of the video start-up. Not checked on a console yet. Replaces the `--up-convert=2` experiment (`v2.11`), which forced only the settings byte. |
 | 16:9 option in that menu (full screen stretch) | Not implemented as a menu item, see "16:9: what was found" below |
 | No blur: texture sampler NEAREST instead of LINEAR in the texture binder | In `v2.08`. By reading the code and host tests; not seen on the TV |
 | No dither: RSX dither switch (method `0x0300`) written as 0 in the state reset | In `v2.08`. Same caveat; on an 8 bits per channel target it should change nothing visible |
@@ -95,7 +96,11 @@ the video thread; on the console the picture changes at once anyway, so the syst
 
 Side bars (fixed in `v2.15`): up to `v2.14`, after Full Screen and back to Normal the side bars kept a frozen copy of the Full Screen picture, and opening and closing the menu cleared them. The setters at `0x27aed0` and `0x27aee8` only store the word, and telling the host the mode being left (`v2.14`) did nothing. What clears the bars is a request byte at `+0xba` of the frame object (`0x306f2a8`): the frame loop (`0x4a0a8`) sees it and marks the four picture buffers for a clear (`0x4a1d4`), and the host sets it with message `0x2d`. Each press of the shortcut now sets it, which was confirmed on a console.
 
-#### Experiment: force Full Screen at the start
+#### Start in Full Screen (`v2.16`)
+
+The start-up (`0x262a58`) stores `Up Convert == 2` as the Full Screen flag (`+0x1c` of `0x306f380`) and passes the Initial Up Convert byte (`+0x29`) to the display object's method `+0x90`, which writes the live word `0x3172f70`. Nothing stores `+0x29`, so the live word started as 0 and the video thread, which recalculates the flag from it, would undo a forced `+0x28`. `--start-fullscreen` changes `mr r29,r3` (`0x262acc`) to `li r29,2` and `clrldi r4,r3,0x38` (`0x262b78`) to `li r4,2`, so both start as Full Screen. Tests run the real instructions in `tests/test_startfull.py`.
+
+#### Experiment: force Full Screen at the start (`v2.11`)
 
 `python ps2_netemu_patch.py ps2_netemu.self out.self --up-convert=2` replaces the one `lbz` at `0x11ad18` with `li r0,2`, so the settings copy stores
 Full Screen whatever the host sent (`--up-convert=1` stores Normal, `=0` Off). The build differs from the default one by exactly that word. It is not in the
@@ -227,6 +232,7 @@ Behind flags of `ps2_netemu_patch.py`; the default build is crop plus `cave_bufc
   not a way forward as it is. The 16:9 menu option is the open item (see Status).
 * `--hotkey` (`cave_hotkey.py`): SELECT + L1 + R1 switches the live Screen Mode word between Normal and Full Screen. In the package since `v2.12`. See "The live Screen Mode and
   the shortcut".
+* `--start-fullscreen` (`start_fullscreen_edits`): the video start-up stores Full Screen and the live Screen Mode word starts as 2, whatever the system sent. In the package since `v2.16`. See "The live Screen Mode and the shortcut".
 * `--up-convert=0|1|2` (`up_convert_edits`): the settings copy stores that Screen Mode (Off, Normal, Full Screen) instead of the byte the host sent.
   See "Screen Mode is the Up Convert setting". Not checked on a console.
 
@@ -273,7 +279,7 @@ You need the stock `ps2_netemu.self` (from `/dev_flash/ps2emu/`); it is not in t
 Needs the [ps3dev](https://github.com/ps3dev/ps3dev) toolchain (`PS3DEV` and `PSL1GHT` set).
 
 ```
-python ps2_netemu_patch.py ps2_netemu.self installer/payload/ps2_netemu_v2.bin
+python ps2_netemu_patch.py ps2_netemu.self installer/payload/ps2_netemu_v2.bin --hotkey --start-fullscreen
 cd installer
 make pkg            # PS2NetemuPatch.gnpdrm.pkg
 tools/dist.sh       # ../dist/ps2_netemu_v<version>.pkg (needs a CHANGELOG.md section for the version)

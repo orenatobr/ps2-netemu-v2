@@ -2,6 +2,12 @@
 
 Every release lists what changed here, newest first. The section of a version is its release notes: `installer/tools/release_notes.sh` prints it and `installer/tools/dist.sh` refuses to package a version that has none. The version lives in `VERSION`; the package and the app show it, the tag is `v<version>`.
 
+## v2.16
+- The emulator starts in Full Screen, even when the Screen Mode of the system is Normal. Two words of the video start-up (`0x262a58`) change (`ps2_netemu_patch.py --start-fullscreen`): `mr r29,r3` at `0x262acc` becomes `li r29,2`, so the start-up stores the Full Screen flag, and `clrldi r4,r3,0x38` at `0x262b78` becomes `li r4,2`, so the live Screen Mode word (`0x3172f70`, the one SELECT + L1 + R1 flips) starts as 2. Everything else is the image of v2.15.
+- Why the two words: the live word is filled from the Initial Up Convert byte (`+0x29` of the settings object), which nothing ever stores, so it started as 0 and the video thread recalculated the flag from it, undoing a forced Up Convert byte (the idea of the v2.11 test build).
+- SELECT + L1 + R1 still switches between Normal and Full Screen from there; the first press goes to Normal.
+- Needs a check on a console: start a game with the Screen Mode on Normal and see whether the picture fills the screen from the first frame.
+
 ## v2.15
 - Fixes the side bars. A console test showed that opening and closing the emulator menu clears the frozen side bars after Full Screen and back to Normal. Reading the code found the request the host uses for this: the frame loop (`0x4a0a8`) checks the byte at `+0xba` of the frame object (`0x306f2a8`) and, when it is set, marks the four picture buffers for a clear (`0x4a1d4`). The host fills that byte with message `0x2d` (`0x131cc0`, `0x133694`). Each press of SELECT + L1 + R1 now sets it after it stores the new mode (`cave_hotkey.py`, 3 instructions).
 - The v2.14 write to the settings Up Convert byte is gone: the console showed it did nothing.
